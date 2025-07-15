@@ -344,7 +344,7 @@ export default function ReservationPage() {
         toast({
           title: 'Reservation Created!',
           description: 'Redirecting to payment...',
-          variant: 'default',
+          variant: 'success',
         });
         window.location.assign(response.checkoutUrl);
       }
@@ -394,7 +394,7 @@ export default function ReservationPage() {
       toast({
         title: 'Feedback Submitted!',
         description: 'Thank you for your feedback.',
-        variant: 'default',
+        variant: 'success',
       });
 
       setFeedbackData({ rating: 0, comment: '' });

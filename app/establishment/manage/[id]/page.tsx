@@ -290,7 +290,7 @@ export default function ManageParkingSpace({
       toast({
         title: 'Success',
         description: 'Parking space updated successfully.',
-        variant: 'default',
+        variant: 'success',
       });
     } catch (err) {
       toast({
@@ -388,7 +388,7 @@ export default function ManageParkingSpace({
       toast({
         title: 'Reservation Completed',
         description: 'Reservation has been marked as completed.',
-        variant: 'default',
+        variant: 'success',
       });
 
       // Update reservation status in state

@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { UserRole } from '@/lib/enums/roles.enum';
 import { AlertTriangle, ArrowLeft, XCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 interface PayMayaFailure {
   status: string;
@@ -30,12 +30,24 @@ interface PayMayaFailure {
   };
 }
 
+function SearchParamFetcher({
+  onReady,
+}: {
+  onReady: (value: string | null) => void;
+}) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    onReady(searchParams.get('requestReferenceNumber'));
+  }, [searchParams, onReady]);
+  return null;
+}
+
 export default function PaymentCancelledPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams(); // ✅ moved to top level
-  const requestReferenceNumber = searchParams.get('requestReferenceNumber'); // used directly
-
+  const [requestReferenceNumber, setRequestReferenceNumber] = useState<
+    string | null
+  >(null);
   const [details, setDetails] = useState<PayMayaFailure | null>(null);
   const { toast } = useToast();
 
@@ -84,8 +96,8 @@ export default function PaymentCancelledPage() {
       }
     };
 
-    if (user && token) fetchStatus();
-  }, [user, loading, token, requestReferenceNumber, router]);
+    if (user && token && requestReferenceNumber) fetchStatus();
+  }, [user, loading, token, requestReferenceNumber, router, toast]);
 
   const getMessage = (code?: string) => {
     switch (code) {
@@ -100,11 +112,20 @@ export default function PaymentCancelledPage() {
 
   const updatedDetails = details ?? null;
 
-  if (!updatedDetails) return null;
+  if (!updatedDetails) {
+    return (
+      <Suspense>
+        <SearchParamFetcher onReady={setRequestReferenceNumber} />
+      </Suspense>
+    );
+  }
 
   if (updatedDetails.data?.error) {
     return (
       <div className='min-h-screen bg-gray-50 py-8'>
+        <Suspense>
+          <SearchParamFetcher onReady={setRequestReferenceNumber} />
+        </Suspense>
         <div className='max-w-2xl mx-auto px-4'>
           <div className='text-center mb-8'>
             <div className='mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4'>
@@ -113,7 +134,7 @@ export default function PaymentCancelledPage() {
             <h1 className='text-3xl font-bold text-gray-900 mb-2'>
               Transaction not found
             </h1>
-            <p className='text-gray-600'>{updatedDetails?.data.error}</p>
+            <p className='text-gray-600'>{updatedDetails.data.error}</p>
           </div>
 
           <div className='flex flex-col sm:flex-row gap-4 justify-center'>
@@ -133,6 +154,9 @@ export default function PaymentCancelledPage() {
 
   return (
     <div className='min-h-screen bg-gray-50 py-8'>
+      <Suspense>
+        <SearchParamFetcher onReady={setRequestReferenceNumber} />
+      </Suspense>
       <div className='max-w-2xl mx-auto px-4'>
         <div className='text-center mb-8'>
           <div className='mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4'>
@@ -146,59 +170,40 @@ export default function PaymentCancelledPage() {
           </p>
         </div>
 
-        {updatedDetails && (
-          <Card className='mb-6 border-red-200'>
-            <CardHeader>
-              <CardTitle className='text-xl text-red-800 flex items-center gap-2'>
-                <AlertTriangle className='w-5 h-5' />
-                Transaction Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className='space-y-4'>
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
-                <div>
-                  <p className='text-gray-600'>Reference No.</p>
-                  <p className='font-semibold'>
-                    {updatedDetails.requestReferenceNumber}
-                  </p>
-                </div>
-                <div>
-                  <p className='text-gray-600'>Amount</p>
-                  <p className='font-semibold'>
-                    ₱{Number(updatedDetails.amount || 0).toFixed(2)}{' '}
-                    {updatedDetails.currency}
-                  </p>
-                </div>
-                <div>
-                  <p className='text-gray-600'>Created At</p>
-                  <p className='font-semibold'>
-                    {updatedDetails.createdAt
-                      ? new Date(updatedDetails.createdAt).toLocaleString()
-                      : '—'}
-                  </p>
-                </div>
-                <div>
-                  <p className='text-gray-600'>Updated At</p>
-                  <p className='font-semibold'>
-                    {updatedDetails.updatedAt
-                      ? new Date(updatedDetails.updatedAt).toLocaleString()
-                      : '—'}
-                  </p>
-                </div>
-              </div>
+        <Card className='mb-6 border-red-200'>
+          <CardHeader>
+            <CardTitle className='text-xl text-red-800 flex items-center gap-2'>
+              <AlertTriangle className='w-5 h-5' />
+              Transaction Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className='space-y-4'>
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
+              <Detail
+                label='Reference No.'
+                value={updatedDetails.requestReferenceNumber}
+              />
+              <Detail
+                label='Amount'
+                value={`₱${Number(updatedDetails.amount || 0).toFixed(2)} ${
+                  updatedDetails.currency || ''
+                }`}
+              />
+              <Detail label='Created At' value={updatedDetails.createdAt} />
+              <Detail label='Updated At' value={updatedDetails.updatedAt} />
+            </div>
 
-              <div className='border-t pt-4'>
-                <h3 className='font-semibold text-gray-800 mb-2'>
-                  Additional Info
-                </h3>
-                <div className='text-sm'>
-                  <p className='text-gray-600'>Description</p>
-                  <p className='font-semibold'>Reservation is cancelled.</p>
-                </div>
+            <div className='border-t pt-4'>
+              <h3 className='font-semibold text-gray-800 mb-2'>
+                Additional Info
+              </h3>
+              <div className='text-sm'>
+                <p className='text-gray-600'>Description</p>
+                <p className='font-semibold'>Reservation is cancelled.</p>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className='flex flex-col sm:flex-row gap-4 justify-center'>
           <Button
@@ -223,6 +228,15 @@ export default function PaymentCancelledPage() {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <p className='text-gray-600'>{label}</p>
+      <p className='font-semibold'>{value || '—'}</p>
     </div>
   );
 }

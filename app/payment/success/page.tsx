@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { UserRole } from '@/lib/enums/roles.enum';
 import { ArrowLeft, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 interface PayMayaStatus {
   id: string;
@@ -36,12 +36,26 @@ interface PayMayaStatus {
   };
 }
 
+// Wrapper component to safely access useSearchParams in a Suspense boundary
+function SearchParamFetcher({
+  onReady,
+}: {
+  onReady: (value: string | null) => void;
+}) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const ref = searchParams.get('requestReferenceNumber');
+    onReady(ref);
+  }, [searchParams, onReady]);
+  return null;
+}
+
 export default function PaymentSuccessPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams(); // ✅ correct usage
-  const requestReferenceNumber = searchParams.get('requestReferenceNumber'); // use directly
-
+  const [requestReferenceNumber, setRequestReferenceNumber] = useState<
+    string | null
+  >(null);
   const [paymentDetails, setPaymentDetails] = useState<PayMayaStatus | null>(
     null
   );
@@ -63,9 +77,7 @@ export default function PaymentSuccessPage() {
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/payments/${requestReferenceNumber}`,
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { Authorization: `Bearer ${token}` },
           }
         );
 
@@ -78,12 +90,12 @@ export default function PaymentSuccessPage() {
           toast({
             title: 'Failed to load payment info',
             description:
-              data.data?.error ||
+              data?.data?.error ||
               'Could not fetch transaction from the server.',
             variant: 'destructive',
           });
         }
-      } catch (err) {
+      } catch {
         toast({
           title: 'Network Error',
           description: 'Unable to reach server. Please try again.',
@@ -92,21 +104,29 @@ export default function PaymentSuccessPage() {
       }
     };
 
-    if (user && token) {
+    if (user && token && requestReferenceNumber) {
       fetchPaymentDetails();
     }
-  }, [user, loading, token, requestReferenceNumber, router]);
+  }, [user, loading, token, requestReferenceNumber, router, toast]);
 
   if (loading || !user || user.role !== UserRole.DRIVER) return null;
 
   const isSuccess = paymentDetails?.status === 'PAYMENT_SUCCESS';
   const updatedDetails = paymentDetails ?? null;
 
-  if (!updatedDetails) return null;
+  if (!updatedDetails)
+    return (
+      <Suspense>
+        <SearchParamFetcher onReady={setRequestReferenceNumber} />
+      </Suspense>
+    );
 
   if (updatedDetails.data?.error) {
     return (
       <div className='min-h-screen bg-gray-50 py-8'>
+        <Suspense>
+          <SearchParamFetcher onReady={setRequestReferenceNumber} />
+        </Suspense>
         <div className='max-w-2xl mx-auto px-4'>
           <div className='text-center mb-8'>
             <div className='mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4'>
@@ -134,6 +154,10 @@ export default function PaymentSuccessPage() {
 
   return (
     <div className='min-h-screen bg-gray-50 py-8'>
+      <Suspense>
+        <SearchParamFetcher onReady={setRequestReferenceNumber} />
+      </Suspense>
+
       <div className='max-w-2xl mx-auto px-4'>
         <div className='text-center mb-8'>
           <div
@@ -165,6 +189,7 @@ export default function PaymentSuccessPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className='space-y-4'>
+              {/* Summary Fields */}
               <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                 <div>
                   <p className='text-sm text-gray-600'>Receipt Number</p>
@@ -202,6 +227,7 @@ export default function PaymentSuccessPage() {
                 </div>
               </div>
 
+              {/* Card Info */}
               <div className='border-t pt-4'>
                 <h3 className='font-semibold text-gray-800 mb-2'>
                   Card Details
@@ -222,6 +248,7 @@ export default function PaymentSuccessPage() {
                 </div>
               </div>
 
+              {/* Timestamps */}
               <div className='border-t pt-4'>
                 <h3 className='font-semibold text-gray-800 mb-2'>Timestamps</h3>
                 <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
