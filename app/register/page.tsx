@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { UserRole } from '@/lib/enums/roles.enum';
+import { Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type React from 'react';
@@ -15,7 +16,6 @@ export default function RegisterPage() {
   const { user, token } = useAuth();
   const router = useRouter();
   const [checkingAuth, setCheckingAuth] = useState(true);
-
   const [formData, setFormData] = useState({
     firstName: '',
     middleName: '',
@@ -26,8 +26,9 @@ export default function RegisterPage() {
     role: UserRole.DRIVER,
     phoneNumber: '',
   });
-
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -267,15 +268,30 @@ export default function RegisterPage() {
             >
               Password *
             </Label>
-            <Input
-              id='password'
-              type='password'
-              value={formData.password}
-              onChange={(e) => handleInputChange('password', e.target.value)}
-              className='w-full p-3 text-sm bg-gray-200 border-none rounded'
-              required
-              minLength={6}
-            />
+            <div className='relative'>
+              <Input
+                id='password'
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={(e) => handleInputChange('password', e.target.value)}
+                className='w-full p-3 text-sm bg-gray-200 border-none rounded pr-12'
+                required
+                minLength={6}
+              />
+              <Button
+                type='button'
+                variant='ghost'
+                size='sm'
+                className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <EyeOff className='h-5 w-5 text-gray-600' />
+                ) : (
+                  <Eye className='h-5 w-5 text-gray-600' />
+                )}
+              </Button>
+            </div>
             <p className='text-xs text-gray-400 mt-3'>
               Password must be at least 12 characters and include uppercase,
               lowercase, number, and special character.
@@ -289,17 +305,32 @@ export default function RegisterPage() {
             >
               Confirm Password *
             </Label>
-            <Input
-              id='confirmPassword'
-              type='password'
-              value={formData.confirmPassword}
-              onChange={(e) =>
-                handleInputChange('confirmPassword', e.target.value)
-              }
-              className='w-full p-3 text-sm bg-gray-200 border-none rounded'
-              required
-              minLength={6}
-            />
+            <div className='relative'>
+              <Input
+                id='confirmPassword'
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={formData.confirmPassword}
+                onChange={(e) =>
+                  handleInputChange('confirmPassword', e.target.value)
+                }
+                className='w-full p-3 text-sm bg-gray-200 border-none rounded pr-12'
+                required
+                minLength={6}
+              />
+              <Button
+                type='button'
+                variant='ghost'
+                size='sm'
+                className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className='h-5 w-5 text-gray-600' />
+                ) : (
+                  <Eye className='h-5 w-5 text-gray-600' />
+                )}
+              </Button>
+            </div>
           </div>
 
           <Button

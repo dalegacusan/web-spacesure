@@ -1,15 +1,15 @@
 'use client';
 
-import type React from 'react';
-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { UserRole } from '@/lib/enums/roles.enum';
+import { Eye, EyeOff } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/auth.context';
 
@@ -20,6 +20,7 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { login } = useAuth();
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,16 +151,31 @@ export default function LoginPage() {
             >
               Password
             </Label>
-            <Input
-              id='password'
-              type='password'
-              value={formData.password}
-              onChange={(e) =>
-                setFormData({ ...formData, password: e.target.value })
-              }
-              className='w-full p-3 sm:p-4 text-base sm:text-lg bg-gray-200 border-none rounded'
-              required
-            />
+            <div className='relative'>
+              <Input
+                id='password'
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
+                className='w-full p-3 sm:p-4 text-base sm:text-lg bg-gray-200 border-none rounded pr-12'
+                required
+              />
+              <Button
+                type='button'
+                variant='ghost'
+                size='sm'
+                className='absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent'
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <EyeOff className='h-5 w-5 text-gray-600' />
+                ) : (
+                  <Eye className='h-5 w-5 text-gray-600' />
+                )}
+              </Button>
+            </div>
           </div>
 
           <Button

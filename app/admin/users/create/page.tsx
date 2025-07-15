@@ -429,6 +429,7 @@ const CreateUserPage = () => {
                     )}
                   </div>
 
+                  {/* Password Field with Eye Icon */}
                   <div>
                     <Label>
                       Password <span className='text-red-500'>*</span>
@@ -459,18 +460,17 @@ const CreateUserPage = () => {
                         )}
                       </Button>
                     </div>
-
-                    {/* 💡 Helper Text */}
-                    <p className='text-xs text-gray-400 mt-3'>
+                    {/* Helper Text */}
+                    <p className='text-xs text-gray-500 mt-1'>
                       Password must be at least 12 characters and include
                       uppercase, lowercase, number, and special character.
                     </p>
-
                     {errors.password && (
                       <p className='text-sm text-red-500'>{errors.password}</p>
                     )}
                   </div>
 
+                  {/* Confirm Password Field with Eye Icon */}
                   <div>
                     <Label>
                       Confirm Password <span className='text-red-500'>*</span>
@@ -757,7 +757,7 @@ const CreateUserPage = () => {
       </main>
 
       <footer className='text-center py-8 text-gray-600'>
-        <Link href='/about'>About Us</Link>{' '}
+        <Link href='/about'>About Us</Link>
         <p>© 2025 SpaceSure. All Rights Reserved</p>
       </footer>
     </div>
