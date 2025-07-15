@@ -25,7 +25,6 @@ interface PayMayaFailure {
       issuer?: string;
     };
   };
-
   data?: {
     error: string;
   };
@@ -34,14 +33,8 @@ interface PayMayaFailure {
 export default function PaymentCancelledPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
-  const [requestReferenceNumber, setRequestReferenceNumber] = useState<
-    string | null
-  >(null);
-
-  useEffect(() => {
-    const searchParams = useSearchParams();
-    setRequestReferenceNumber(searchParams.get('requestReferenceNumber'));
-  }, []);
+  const searchParams = useSearchParams(); // ✅ moved to top level
+  const requestReferenceNumber = searchParams.get('requestReferenceNumber'); // used directly
 
   const [details, setDetails] = useState<PayMayaFailure | null>(null);
   const { toast } = useToast();
@@ -71,17 +64,14 @@ export default function PaymentCancelledPage() {
         const data = await response.json();
 
         if (response.ok) {
-          if (Array.isArray(data)) {
-            setDetails(data[0]);
-          } else if (data) {
-            setDetails(data);
-          }
+          setDetails(Array.isArray(data) ? data[0] : data);
         } else {
           setDetails(data);
           toast({
             title: 'Failed to load payment info',
             description:
-              data.data.error || 'Could not fetch transaction from the server.',
+              data.data?.error ||
+              'Could not fetch transaction from the server.',
             variant: 'destructive',
           });
         }
@@ -108,37 +98,33 @@ export default function PaymentCancelledPage() {
 
   if (loading || !user || user.role !== UserRole.DRIVER) return null;
 
-  const updatedDetails = details ? details : null;
+  const updatedDetails = details ?? null;
 
-  if (!updatedDetails) {
-    return null;
-  }
+  if (!updatedDetails) return null;
 
-  if (updatedDetails && updatedDetails.data?.error) {
+  if (updatedDetails.data?.error) {
     return (
       <div className='min-h-screen bg-gray-50 py-8'>
         <div className='max-w-2xl mx-auto px-4'>
           <div className='text-center mb-8'>
-            <div className='text-center mb-8'>
-              <div className='mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4'>
-                <XCircle className='w-8 h-8 text-red-600' />
-              </div>
-              <h1 className='text-3xl font-bold text-gray-900 mb-2'>
-                Transaction not found
-              </h1>
-              <p className='text-gray-600'>{updatedDetails?.data.error}</p>
+            <div className='mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4'>
+              <XCircle className='w-8 h-8 text-red-600' />
             </div>
+            <h1 className='text-3xl font-bold text-gray-900 mb-2'>
+              Transaction not found
+            </h1>
+            <p className='text-gray-600'>{updatedDetails?.data.error}</p>
+          </div>
 
-            <div className='flex flex-col sm:flex-row gap-4 justify-center'>
-              <Button
-                variant='outline'
-                onClick={() => router.push('/home')}
-                className='flex items-center gap-2'
-              >
-                <ArrowLeft className='w-4 h-4' />
-                Back to Dashboard
-              </Button>
-            </div>
+          <div className='flex flex-col sm:flex-row gap-4 justify-center'>
+            <Button
+              variant='outline'
+              onClick={() => router.push('/home')}
+              className='flex items-center gap-2'
+            >
+              <ArrowLeft className='w-4 h-4' />
+              Back to Dashboard
+            </Button>
           </div>
         </div>
       </div>

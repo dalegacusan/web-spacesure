@@ -31,7 +31,6 @@ interface PayMayaStatus {
   receipt?: {
     transactionId?: string;
   };
-
   data?: {
     error: string;
   };
@@ -40,14 +39,8 @@ interface PayMayaStatus {
 export default function PaymentSuccessPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
-  const [requestReferenceNumber, setRequestReferenceNumber] = useState<
-    string | null
-  >(null);
-
-  useEffect(() => {
-    const searchParams = useSearchParams();
-    setRequestReferenceNumber(searchParams.get('requestReferenceNumber'));
-  }, []);
+  const searchParams = useSearchParams(); // ✅ correct usage
+  const requestReferenceNumber = searchParams.get('requestReferenceNumber'); // use directly
 
   const [paymentDetails, setPaymentDetails] = useState<PayMayaStatus | null>(
     null
@@ -66,71 +59,73 @@ export default function PaymentSuccessPage() {
         return;
       }
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/payments/${requestReferenceNumber}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/payments/${requestReferenceNumber}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (response.ok) {
-        if (Array.isArray(data)) {
-          setPaymentDetails(data[0]);
-        } else if (data) {
+        if (response.ok) {
+          setPaymentDetails(Array.isArray(data) ? data[0] : data);
+        } else {
           setPaymentDetails(data);
+          toast({
+            title: 'Failed to load payment info',
+            description:
+              data.data?.error ||
+              'Could not fetch transaction from the server.',
+            variant: 'destructive',
+          });
         }
-      } else {
-        setPaymentDetails(data);
+      } catch (err) {
         toast({
-          title: 'Failed to load payment info',
-          description:
-            data.data.error || 'Could not fetch transaction from the server.',
+          title: 'Network Error',
+          description: 'Unable to reach server. Please try again.',
           variant: 'destructive',
         });
       }
     };
 
-    if (user && token) fetchPaymentDetails();
+    if (user && token) {
+      fetchPaymentDetails();
+    }
   }, [user, loading, token, requestReferenceNumber, router]);
 
   if (loading || !user || user.role !== UserRole.DRIVER) return null;
 
   const isSuccess = paymentDetails?.status === 'PAYMENT_SUCCESS';
-  const updatedDetails = paymentDetails ? paymentDetails : null;
+  const updatedDetails = paymentDetails ?? null;
 
-  if (!updatedDetails) {
-    return null;
-  }
+  if (!updatedDetails) return null;
 
-  if (updatedDetails && updatedDetails.data?.error) {
+  if (updatedDetails.data?.error) {
     return (
       <div className='min-h-screen bg-gray-50 py-8'>
         <div className='max-w-2xl mx-auto px-4'>
           <div className='text-center mb-8'>
-            <div className='text-center mb-8'>
-              <div className='mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4'>
-                <XCircle className='w-8 h-8 text-red-600' />
-              </div>
-              <h1 className='text-3xl font-bold text-gray-900 mb-2'>
-                Transaction not found
-              </h1>
-              <p className='text-gray-600'>{updatedDetails?.data.error}</p>
+            <div className='mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4'>
+              <XCircle className='w-8 h-8 text-red-600' />
             </div>
-
-            <div className='flex flex-col sm:flex-row gap-4 justify-center'>
-              <Button
-                variant='outline'
-                onClick={() => router.push('/home')}
-                className='flex items-center gap-2'
-              >
-                <ArrowLeft className='w-4 h-4' />
-                Back to Dashboard
-              </Button>
-            </div>
+            <h1 className='text-3xl font-bold text-gray-900 mb-2'>
+              Transaction not found
+            </h1>
+            <p className='text-gray-600'>{updatedDetails?.data.error}</p>
+          </div>
+          <div className='flex flex-col sm:flex-row gap-4 justify-center'>
+            <Button
+              variant='outline'
+              onClick={() => router.push('/home')}
+              className='flex items-center gap-2'
+            >
+              <ArrowLeft className='w-4 h-4' />
+              Back to Dashboard
+            </Button>
           </div>
         </div>
       </div>
@@ -162,7 +157,7 @@ export default function PaymentSuccessPage() {
           </p>
         </div>
 
-        {isSuccess && paymentDetails && (
+        {isSuccess && (
           <Card className='mb-6'>
             <CardHeader>
               <CardTitle className='text-xl text-gray-800'>
@@ -174,35 +169,35 @@ export default function PaymentSuccessPage() {
                 <div>
                   <p className='text-sm text-gray-600'>Receipt Number</p>
                   <p className='font-semibold'>
-                    {paymentDetails.receiptNumber || '—'}
+                    {updatedDetails.receiptNumber || '—'}
                   </p>
                 </div>
                 <div>
                   <p className='text-sm text-gray-600'>Transaction ID</p>
                   <p className='font-semibold'>
-                    {paymentDetails.receipt?.transactionId || '—'}
+                    {updatedDetails.receipt?.transactionId || '—'}
                   </p>
                 </div>
                 <div>
                   <p className='text-sm text-gray-600'>Request Reference No.</p>
                   <p className='font-semibold'>
-                    {paymentDetails.requestReferenceNumber}
+                    {updatedDetails.requestReferenceNumber}
                   </p>
                 </div>
                 <div>
                   <p className='text-sm text-gray-600'>Amount</p>
                   <p className='font-semibold text-green-600'>
-                    ₱{Number(paymentDetails.amount).toFixed(2)}
+                    ₱{Number(updatedDetails.amount).toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className='text-sm text-gray-600'>Currency</p>
-                  <p className='font-semibold'>{paymentDetails.currency}</p>
+                  <p className='font-semibold'>{updatedDetails.currency}</p>
                 </div>
                 <div>
                   <p className='text-sm text-gray-600'>Description</p>
                   <p className='font-semibold'>
-                    {paymentDetails.description || '—'}
+                    {updatedDetails.description || '—'}
                   </p>
                 </div>
               </div>
@@ -215,13 +210,13 @@ export default function PaymentSuccessPage() {
                   <div>
                     <p className='text-sm text-gray-600'>Card</p>
                     <p className='font-semibold'>
-                      {paymentDetails.fundSource?.details?.masked || '—'}
+                      {updatedDetails.fundSource?.details?.masked || '—'}
                     </p>
                   </div>
                   <div>
                     <p className='text-sm text-gray-600'>Issuer</p>
                     <p className='font-semibold'>
-                      {paymentDetails.fundSource?.details?.issuer || '—'}
+                      {updatedDetails.fundSource?.details?.issuer || '—'}
                     </p>
                   </div>
                 </div>
@@ -233,13 +228,13 @@ export default function PaymentSuccessPage() {
                   <div>
                     <p className='text-sm text-gray-600'>Created At</p>
                     <p className='font-semibold'>
-                      {new Date(paymentDetails.createdAt).toLocaleString()}
+                      {new Date(updatedDetails.createdAt).toLocaleString()}
                     </p>
                   </div>
                   <div>
                     <p className='text-sm text-gray-600'>Updated At</p>
                     <p className='font-semibold'>
-                      {new Date(paymentDetails.updatedAt).toLocaleString()}
+                      {new Date(updatedDetails.updatedAt).toLocaleString()}
                     </p>
                   </div>
                 </div>

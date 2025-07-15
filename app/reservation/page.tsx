@@ -18,7 +18,11 @@ import { UserRole } from '@/lib/enums/roles.enum';
 import {
   AlertTriangle,
   ArrowLeft,
+  Calendar,
+  Car,
+  CheckCircle,
   Clock,
+  CreditCard,
   Home,
   MapPin,
   MessageSquare,
@@ -45,12 +49,14 @@ export default function ReservationPage() {
     date: '',
     timeIn: '16:00',
     timeOut: '20:00',
-    reservationType: 'hourly', // New field for reservation type
+    reservationType: 'hourly',
   });
 
   const [total, setTotal] = useState(0);
   const [parkingLot, setParkingLot] = useState<any>(null);
   const [vehicles, setVehicles] = useState<any[]>([]);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [feedbackData, setFeedbackData] = useState({
     rating: 0,
@@ -186,7 +192,6 @@ export default function ReservationPage() {
   const handleTimeInChange = (newTimeIn: string) => {
     let updatedForm = { ...formData, timeIn: newTimeIn };
 
-    // If new time in is after time out, adjust time out
     if (isTimeAfter(newTimeIn, formData.timeOut)) {
       const newTimeOut = addHoursToTime(newTimeIn, 1);
       updatedForm = { ...updatedForm, timeOut: newTimeOut };
@@ -212,7 +217,6 @@ export default function ReservationPage() {
   };
 
   const handleTimeOutChange = (newTimeOut: string) => {
-    // Prevent setting time out before time in
     if (isTimeAfter(formData.timeIn, newTimeOut)) {
       toast({
         title: 'Invalid Time Selection',
@@ -236,7 +240,7 @@ export default function ReservationPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validate that selected date and time are not in the past
@@ -280,7 +284,6 @@ export default function ReservationPage() {
       return;
     }
 
-    // For hourly reservations, validate time fields
     if (
       formData.reservationType === 'hourly' &&
       (!formData.timeIn || !formData.timeOut)
@@ -294,46 +297,66 @@ export default function ReservationPage() {
       return;
     }
 
-    // Set default times for whole day reservations
-    const startTime =
-      formData.reservationType === 'whole_day' ? '00:00' : formData.timeIn;
-    const endTime =
-      formData.reservationType === 'whole_day' ? '23:59' : formData.timeOut;
+    // Show confirmation modal
+    setShowConfirmation(true);
+  };
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reservations`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        parking_space_id: lotId,
-        vehicle_id: formData.vehicle,
-        start_time: `${formData.date}T${startTime}:00.000Z`,
-        end_time: `${formData.date}T${endTime}:00.000Z`,
-        reservation_type: formData.reservationType,
-        hourly_rate: parkingLot.hourlyRate,
-        whole_day_rate: parkingLot.whole_day_rate,
-        total_price: total,
-      }),
-    });
+  const handleConfirmReservation = async () => {
+    setIsSubmitting(true);
 
-    const response = await res.json();
+    try {
+      const startTime =
+        formData.reservationType === 'whole_day' ? '00:00' : formData.timeIn;
+      const endTime =
+        formData.reservationType === 'whole_day' ? '23:59' : formData.timeOut;
 
-    if (!res.ok) {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/reservations`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            parking_space_id: lotId,
+            vehicle_id: formData.vehicle,
+            start_time: `${formData.date}T${startTime}:00.000Z`,
+            end_time: `${formData.date}T${endTime}:00.000Z`,
+            reservation_type: formData.reservationType,
+            hourly_rate: parkingLot.hourlyRate,
+            whole_day_rate: parkingLot.whole_day_rate,
+            total_price: total,
+          }),
+        }
+      );
+
+      const response = await res.json();
+
+      if (!res.ok) {
+        toast({
+          title: 'Reservation Failed',
+          description:
+            response.message || response.error || 'Something went wrong',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Reservation Created!',
+          description: 'Redirecting to payment...',
+          variant: 'default',
+        });
+        window.location.assign(response.checkoutUrl);
+      }
+    } catch (error) {
       toast({
-        title: 'Registration Failed',
-        description:
-          response.message || response.error || 'Something went wrong',
+        title: 'Reservation Failed',
+        description: 'An unexpected error occurred. Please try again.',
         variant: 'destructive',
       });
-    } else {
-      toast({
-        title: 'Reservation Created!',
-        description: 'Redirecting to payment...',
-        variant: 'default',
-      });
-      window.location.assign(response.checkoutUrl);
+    } finally {
+      setIsSubmitting(false);
+      setShowConfirmation(false);
     }
   };
 
@@ -441,8 +464,8 @@ export default function ReservationPage() {
 
   const getCurrentDateTime = () => {
     const now = new Date();
-    const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD format
-    const currentTime = now.toTimeString().slice(0, 5); // HH:MM format
+    const currentDate = now.toISOString().split('T')[0];
+    const currentTime = now.toTimeString().slice(0, 5);
     return { currentDate, currentTime };
   };
 
@@ -453,6 +476,28 @@ export default function ReservationPage() {
     const selectedDateTime = new Date(`${selectedDate}T${selectedTime}`);
 
     return selectedDateTime < now;
+  };
+
+  const getSelectedVehicle = () => {
+    return vehicles.find((v) => v._id === formData.vehicle);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  const formatTime = (timeString: string) => {
+    const [hours, minutes] = timeString.split(':');
+    const hour = Number.parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
   };
 
   if (
@@ -473,7 +518,6 @@ export default function ReservationPage() {
         <Navbar userRole='driver' userName={user?.first_name || 'User'} />
 
         <main className='max-w-4xl mx-auto px-4 sm:px-6 py-12'>
-          {/* Back Button */}
           <div className='mb-6'>
             <Button
               onClick={() => router.push('/parking-selection')}
@@ -485,7 +529,6 @@ export default function ReservationPage() {
             </Button>
           </div>
 
-          {/* Header Section */}
           <div className='text-center mb-8'>
             <div className='inline-flex items-center justify-center w-20 h-20 bg-red-100 rounded-full mb-6'>
               <XCircle className='w-10 h-10 text-red-600' />
@@ -499,7 +542,6 @@ export default function ReservationPage() {
             </p>
           </div>
 
-          {/* Parking Space Info Card */}
           <div className='bg-white rounded-2xl shadow-xl border border-red-200 p-6 sm:p-8 mb-8'>
             <div className='flex items-start justify-between mb-6'>
               <div className='flex-1'>
@@ -518,7 +560,6 @@ export default function ReservationPage() {
               </div>
             </div>
 
-            {/* Status Information */}
             <div className='bg-red-50 border border-red-200 rounded-xl p-6'>
               <div className='flex items-start space-x-4'>
                 <AlertTriangle className='w-6 h-6 text-red-600 mt-1 flex-shrink-0' />
@@ -536,7 +577,6 @@ export default function ReservationPage() {
               </div>
             </div>
 
-            {/* Facility Details */}
             <div className='grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-200'>
               <div className='text-center'>
                 <div className='text-2xl font-bold text-gray-400'>
@@ -563,7 +603,6 @@ export default function ReservationPage() {
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className='flex flex-col sm:flex-row gap-4 justify-center'>
             <Button
               onClick={() => router.push('/home')}
@@ -583,7 +622,6 @@ export default function ReservationPage() {
             </Button>
           </div>
 
-          {/* Help Section */}
           <div className='mt-12 text-center'>
             <div className='bg-blue-50 border border-blue-200 rounded-xl p-6'>
               <Clock className='w-8 h-8 text-blue-600 mx-auto mb-4' />
@@ -623,8 +661,137 @@ export default function ReservationPage() {
     <div className='min-h-screen bg-gray-100'>
       <Navbar userRole='driver' userName={user?.first_name || 'User'} />
 
+      {/* Confirmation Modal */}
+      {showConfirmation && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4'>
+          <div className='bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto'>
+            <div className='p-6'>
+              <div className='flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mx-auto mb-4'>
+                <CheckCircle className='w-8 h-8 text-blue-600' />
+              </div>
+
+              <h2 className='text-2xl font-bold text-center text-gray-900 mb-2'>
+                Confirm Your Reservation
+              </h2>
+
+              <p className='text-gray-600 text-center mb-6'>
+                Please review your booking details before proceeding to payment.
+              </p>
+
+              <div className='space-y-4 mb-6'>
+                <div className='bg-gray-50 rounded-lg p-4'>
+                  <div className='flex items-center mb-2'>
+                    <MapPin className='w-5 h-5 text-gray-500 mr-2' />
+                    <span className='font-semibold text-gray-900'>
+                      Location
+                    </span>
+                  </div>
+                  <p className='text-gray-700 ml-7'>
+                    {parkingLot.establishment_name}
+                  </p>
+                  <p className='text-sm text-gray-500 ml-7'>
+                    {parkingLot.address}, {parkingLot.city}
+                  </p>
+                </div>
+
+                <div className='bg-gray-50 rounded-lg p-4'>
+                  <div className='flex items-center mb-2'>
+                    <Car className='w-5 h-5 text-gray-500 mr-2' />
+                    <span className='font-semibold text-gray-900'>Vehicle</span>
+                  </div>
+                  <p className='text-gray-700 ml-7'>
+                    {getSelectedVehicle()?.year_make_model} -{' '}
+                    {getSelectedVehicle()?.plate_number}
+                  </p>
+                </div>
+
+                <div className='bg-gray-50 rounded-lg p-4'>
+                  <div className='flex items-center mb-2'>
+                    <Calendar className='w-5 h-5 text-gray-500 mr-2' />
+                    <span className='font-semibold text-gray-900'>
+                      Date & Time
+                    </span>
+                  </div>
+                  <p className='text-gray-700 ml-7'>
+                    {formatDate(formData.date)}
+                  </p>
+                  {formData.reservationType === 'hourly' ? (
+                    <p className='text-sm text-gray-500 ml-7'>
+                      {formatTime(formData.timeIn)} -{' '}
+                      {formatTime(formData.timeOut)}
+                    </p>
+                  ) : (
+                    <p className='text-sm text-gray-500 ml-7'>
+                      Whole Day (12:00 AM - 11:59 PM)
+                    </p>
+                  )}
+                </div>
+
+                <div className='bg-blue-50 rounded-lg p-4 border border-blue-200'>
+                  <div className='flex items-center justify-between'>
+                    <div className='flex items-center'>
+                      <CreditCard className='w-5 h-5 text-blue-600 mr-2' />
+                      <span className='font-semibold text-blue-900'>
+                        Total Amount
+                      </span>
+                    </div>
+                    <span className='text-2xl font-bold text-blue-600'>
+                      ₱{total.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className='text-sm text-blue-700 ml-7'>
+                    {formData.reservationType === 'whole_day'
+                      ? 'Whole Day Rate'
+                      : `${Math.max(
+                          1,
+                          Number.parseInt(formData.timeOut.split(':')[0]) -
+                            Number.parseInt(formData.timeIn.split(':')[0])
+                        )} hour${
+                          Math.max(
+                            1,
+                            Number.parseInt(formData.timeOut.split(':')[0]) -
+                              Number.parseInt(formData.timeIn.split(':')[0])
+                          ) !== 1
+                            ? 's'
+                            : ''
+                        } @ ₱${parkingLot.hourlyRate}/hr`}
+                  </p>
+                </div>
+              </div>
+
+              <div className='flex gap-3'>
+                <Button
+                  onClick={() => setShowConfirmation(false)}
+                  variant='outline'
+                  className='flex-1'
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirmReservation}
+                  className='flex-1 bg-blue-600 hover:bg-blue-700'
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className='animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2'></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className='w-4 h-4 mr-2' />
+                      Proceed to Payment
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className='max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8'>
-        {/* Back Button */}
         <div className='mb-6'>
           <Button
             onClick={() => router.push('/parking-selection')}
@@ -696,7 +863,6 @@ export default function ReservationPage() {
               </div>
             </div>
 
-            {/* Feedback Section */}
             <div className='bg-white rounded-xl shadow-xl p-6 border-0'>
               <div className='flex items-center justify-between mb-6'>
                 <h2 className='text-xl font-bold text-gray-800 flex items-center'>
@@ -786,7 +952,6 @@ export default function ReservationPage() {
                 </form>
               ) : (
                 <div className='space-y-6'>
-                  {/* Recent Feedbacks */}
                   {feedbacks.length > 0 ? (
                     <div>
                       <h3 className='text-lg font-semibold text-gray-800 mb-4'>
@@ -834,13 +999,15 @@ export default function ReservationPage() {
             </div>
           </div>
 
-          {/* Reservation Form */}
           <div className='bg-white rounded-xl shadow-2xl p-6 sm:p-8 border-0'>
             <h1 className='text-xl sm:text-3xl font-bold text-center mb-6 sm:mb-8 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent'>
               RESERVATION FORM
             </h1>
 
-            <form onSubmit={handleSubmit} className='space-y-4 sm:space-y-6'>
+            <form
+              onSubmit={handleFormSubmit}
+              className='space-y-4 sm:space-y-6'
+            >
               <div>
                 <Label
                   htmlFor='vehicle'
@@ -891,7 +1058,6 @@ export default function ReservationPage() {
                 />
               </div>
 
-              {/* Reservation Type Selection */}
               <div>
                 <Label
                   htmlFor='reservationType'
@@ -929,7 +1095,6 @@ export default function ReservationPage() {
                 </Select>
               </div>
 
-              {/* Time Selection - Only show for hourly reservations */}
               {formData.reservationType === 'hourly' && (
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
                   <div>
@@ -974,7 +1139,6 @@ export default function ReservationPage() {
                 </div>
               )}
 
-              {/* Whole Day Information */}
               {formData.reservationType === 'whole_day' && (
                 <div className='bg-blue-50 border border-blue-200 rounded-xl p-4'>
                   <div className='flex items-center space-x-2 mb-2'>
@@ -1031,7 +1195,7 @@ export default function ReservationPage() {
                     type='submit'
                     className='w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 text-lg rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200'
                   >
-                    Proceed to Payment
+                    Review Reservation
                   </Button>
                 </div>
               </div>
