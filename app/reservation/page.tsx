@@ -169,6 +169,73 @@ export default function ReservationPage() {
     }
   };
 
+  const addHoursToTime = (time: string, hours: number): string => {
+    const [hour, minute] = time.split(':').map(Number);
+    const newHour = Math.min(23, hour + hours);
+    return `${newHour.toString().padStart(2, '0')}:${minute
+      .toString()
+      .padStart(2, '0')}`;
+  };
+
+  const isTimeAfter = (time1: string, time2: string): boolean => {
+    const [hour1, minute1] = time1.split(':').map(Number);
+    const [hour2, minute2] = time2.split(':').map(Number);
+    return hour1 > hour2 || (hour1 === hour2 && minute1 > minute2);
+  };
+
+  const handleTimeInChange = (newTimeIn: string) => {
+    let updatedForm = { ...formData, timeIn: newTimeIn };
+
+    // If new time in is after time out, adjust time out
+    if (isTimeAfter(newTimeIn, formData.timeOut)) {
+      const newTimeOut = addHoursToTime(newTimeIn, 1);
+      updatedForm = { ...updatedForm, timeOut: newTimeOut };
+
+      toast({
+        title: 'Time Adjusted',
+        description:
+          'Time Out has been automatically adjusted to be after Time In.',
+        variant: 'default',
+      });
+    }
+
+    setFormData(updatedForm);
+    if (parkingLot) {
+      computeTotal(
+        updatedForm.timeIn,
+        updatedForm.timeOut,
+        updatedForm.reservationType,
+        parkingLot.hourlyRate,
+        parkingLot.whole_day_rate
+      );
+    }
+  };
+
+  const handleTimeOutChange = (newTimeOut: string) => {
+    // Prevent setting time out before time in
+    if (isTimeAfter(formData.timeIn, newTimeOut)) {
+      toast({
+        title: 'Invalid Time Selection',
+        description:
+          'Time Out cannot be before Time In. Please select a later time.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const updatedForm = { ...formData, timeOut: newTimeOut };
+    setFormData(updatedForm);
+    if (parkingLot) {
+      computeTotal(
+        updatedForm.timeIn,
+        updatedForm.timeOut,
+        updatedForm.reservationType,
+        parkingLot.hourlyRate,
+        parkingLot.whole_day_rate
+      );
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -184,10 +251,10 @@ export default function ReservationPage() {
         return;
       }
 
-      if (formData.timeOut <= formData.timeIn) {
+      if (isTimeAfter(formData.timeIn, formData.timeOut)) {
         toast({
           title: 'Invalid Time Selection',
-          description: 'Time out must be after time in.',
+          description: 'Time Out must be after Time In.',
           variant: 'destructive',
         });
         return;
@@ -881,20 +948,7 @@ export default function ReservationPage() {
                           ? getCurrentDateTime().currentTime
                           : undefined
                       }
-                      onChange={(e) => {
-                        const timeIn = e.target.value;
-                        const updatedForm = { ...formData, timeIn };
-                        setFormData(updatedForm);
-                        if (parkingLot) {
-                          computeTotal(
-                            updatedForm.timeIn,
-                            updatedForm.timeOut,
-                            updatedForm.reservationType,
-                            parkingLot.hourlyRate,
-                            parkingLot.whole_day_rate
-                          );
-                        }
-                      }}
+                      onChange={(e) => handleTimeInChange(e.target.value)}
                       className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
                       required
                     />
@@ -911,21 +965,8 @@ export default function ReservationPage() {
                       id='timeOut'
                       type='time'
                       value={formData.timeOut}
-                      min={formData.timeIn}
-                      onChange={(e) => {
-                        const timeOut = e.target.value;
-                        const updatedForm = { ...formData, timeOut };
-                        setFormData(updatedForm);
-                        if (parkingLot) {
-                          computeTotal(
-                            updatedForm.timeIn,
-                            updatedForm.timeOut,
-                            updatedForm.reservationType,
-                            parkingLot.hourlyRate,
-                            parkingLot.whole_day_rate
-                          );
-                        }
-                      }}
+                      min={addHoursToTime(formData.timeIn, 0)}
+                      onChange={(e) => handleTimeOutChange(e.target.value)}
                       className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
                       required
                     />
