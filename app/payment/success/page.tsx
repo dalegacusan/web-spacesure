@@ -40,8 +40,14 @@ interface PayMayaStatus {
 export default function PaymentSuccessPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestReferenceNumber = searchParams.get('requestReferenceNumber');
+  const [requestReferenceNumber, setRequestReferenceNumber] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    const searchParams = useSearchParams();
+    setRequestReferenceNumber(searchParams.get('requestReferenceNumber'));
+  }, []);
 
   const [paymentDetails, setPaymentDetails] = useState<PayMayaStatus | null>(
     null

@@ -34,8 +34,14 @@ interface PayMayaFailure {
 export default function PaymentFailurePage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestReferenceNumber = searchParams.get('requestReferenceNumber');
+  const [requestReferenceNumber, setRequestReferenceNumber] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    const searchParams = useSearchParams();
+    setRequestReferenceNumber(searchParams.get('requestReferenceNumber'));
+  }, []);
 
   const [details, setDetails] = useState<PayMayaFailure | null>(null);
   const { toast } = useToast();
