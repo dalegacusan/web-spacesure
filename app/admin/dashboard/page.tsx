@@ -390,14 +390,14 @@ export default function AdminDashboard() {
                             <p>
                               <span className='font-medium'>Vehicle:</span>{' '}
                               {r.vehicle
-                                ? `${r.vehicle.year_make_model} (${r.vehicle.vehicle_type})`
+                                ? `${r.vehicle?.year_make_model} (${r.vehicle?.vehicle_type})`
                                 : 'Unknown Vehicle'}
                             </p>
                             <p>
                               <span className='font-medium'>Plate:</span>{' '}
                               <span className='font-mono'>
                                 {r.vehicle?.plate_number
-                                  ? r.vehicle.plate_number
+                                  ? r.vehicle?.plate_number
                                   : 'Unknown Plate'}
                               </span>
                             </p>

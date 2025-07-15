@@ -164,19 +164,19 @@ export default function VehicleTable() {
             </thead>
             <tbody className='bg-white divide-y divide-gray-200'>
               {filteredVehicles.map((vehicle) => (
-                <tr key={vehicle.id}>
+                <tr key={vehicle?.id}>
                   <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900'>
-                    {vehicle.plateNumber}
+                    {vehicle?.plateNumber}
                   </td>
                   <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                    {vehicle.yearMakeModel}
+                    {vehicle?.yearMakeModel}
                   </td>
                   <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                    {vehicle.color}
+                    {vehicle?.color}
                   </td>
                   <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
                     <div className='flex space-x-2'>
-                      <Link href={`/vehicles/edit/${vehicle.id}`}>
+                      <Link href={`/vehicles/edit/${vehicle?.id}`}>
                         <Button variant='outline' size='sm'>
                           <Edit className='w-4 h-4' />
                         </Button>
@@ -184,7 +184,7 @@ export default function VehicleTable() {
                       <Button
                         variant='outline'
                         size='sm'
-                        onClick={() => handleDelete(vehicle.id)}
+                        onClick={() => handleDelete(vehicle?.id)}
                         className='text-red-600 hover:text-red-700'
                       >
                         <Trash2 className='w-4 h-4' />
@@ -201,10 +201,12 @@ export default function VehicleTable() {
       {/* Mobile Cards */}
       <div className='lg:hidden space-y-4'>
         {filteredVehicles.map((vehicle) => (
-          <Card key={vehicle.id}>
+          <Card key={vehicle?.id}>
             <CardHeader className='pb-3'>
               <div className='flex justify-between items-start'>
-                <CardTitle className='text-lg'>{vehicle.plateNumber}</CardTitle>
+                <CardTitle className='text-lg'>
+                  {vehicle?.plateNumber}
+                </CardTitle>
               </div>
             </CardHeader>
             <CardContent className='space-y-3'>
@@ -213,15 +215,15 @@ export default function VehicleTable() {
                   <span className='font-medium text-gray-500'>
                     Year, Make & Model:
                   </span>
-                  <p>{vehicle.yearMakeModel}</p>
+                  <p>{vehicle?.yearMakeModel}</p>
                 </div>
                 <div>
                   <span className='font-medium text-gray-500'>Color:</span>
-                  <p>{vehicle.color}</p>
+                  <p>{vehicle?.color}</p>
                 </div>
               </div>
               <div className='flex gap-2 pt-2 border-t'>
-                <Link href={`/vehicles/edit/${vehicle.id}`} className='flex-1'>
+                <Link href={`/vehicles/edit/${vehicle?.id}`} className='flex-1'>
                   <Button variant='outline' size='sm' className='w-full'>
                     <Edit className='w-4 h-4 mr-2' />
                     Edit
@@ -230,7 +232,7 @@ export default function VehicleTable() {
                 <Button
                   variant='outline'
                   size='sm'
-                  onClick={() => handleDelete(vehicle.id)}
+                  onClick={() => handleDelete(vehicle?.id)}
                   className='flex-1 text-red-600 hover:text-red-700'
                 >
                   <Trash2 className='w-4 h-4 mr-2' />

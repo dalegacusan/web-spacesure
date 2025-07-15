@@ -70,7 +70,7 @@ export default function HistoryTable() {
     const filtered = history.filter(
       (item) =>
         item.establishment.toLowerCase().includes(term.toLowerCase()) ||
-        item.vehicle.plate_number.toLowerCase().includes(term.toLowerCase()) ||
+        item.vehicle?.plate_number.toLowerCase().includes(term.toLowerCase()) ||
         item.status.toLowerCase().includes(term.toLowerCase())
     );
     setFilteredHistory(filtered);

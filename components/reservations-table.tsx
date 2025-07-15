@@ -42,7 +42,7 @@ export default function ReservationsTable({ data }: Props) {
       return (
         reservation._id.toLowerCase().includes(term.toLowerCase()) ||
         customerName.toLowerCase().includes(term.toLowerCase()) ||
-        reservation.vehicle.plate_number
+        reservation.vehicle?.plate_number
           .toLowerCase()
           .includes(term.toLowerCase()) ||
         reservation.parking_space?.establishment_name

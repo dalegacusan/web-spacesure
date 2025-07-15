@@ -193,6 +193,7 @@ export default function LoginPage() {
           <div className='text-white/90 text-xs sm:text-sm space-y-1'>
             <p>
               <strong>Driver:</strong> driver@test.com / driver123
+              johndoe@gmail.com / Dalegacusan1234567890!!
             </p>
             <p>
               <strong>Establishment:</strong> establishment1@test.com,
