@@ -652,7 +652,9 @@ export default function ReservationPage() {
         </main>
 
         <footer className='text-center py-8 text-gray-600 border-t border-gray-200 bg-white'>
-          <p className='mb-2'>About Us</p>
+          <p className='mb-2'>
+            <Link href='/about'>About Us</Link>
+          </p>
           <p>© 2025 SpaceSure. All Rights Reserved</p>
         </footer>
       </div>
@@ -661,7 +663,7 @@ export default function ReservationPage() {
 
   return (
     <div className='min-h-screen bg-gray-100'>
-      <Navbar userRole='driver' userName={user?.first_name || 'User'} />
+      <Navbar />
 
       {/* Confirmation Modal */}
       {showConfirmation && (
@@ -1211,7 +1213,9 @@ export default function ReservationPage() {
       </main>
 
       <footer className='text-center py-8 text-gray-600'>
-        <Link href='/about'>About Us</Link>
+        <p className='mb-2'>
+          <Link href='/about'>About Us</Link>
+        </p>
         <p>© 2025 SpaceSure. All Rights Reserved</p>
       </footer>
     </div>

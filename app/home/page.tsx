@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/auth.context';
@@ -171,7 +172,9 @@ export default function HomePage() {
       </main>
 
       <footer className='text-center py-8 sm:py-12 text-gray-600 bg-slate-200'>
-        <p className='text-base sm:text-lg font-medium'>About Us</p>
+        <p className='text-xs sm:text-sm mb-2'>
+          <Link href='/about'>About Us</Link>
+        </p>
         <p className='text-xs sm:text-sm'>
           © 2025 SpaceSure. All Rights Reserved
         </p>

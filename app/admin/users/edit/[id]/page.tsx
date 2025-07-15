@@ -740,7 +740,9 @@ export default function EditUserPage() {
       </main>
 
       <footer className='text-center py-8 text-gray-600'>
-        <Link href='/about'>About Us</Link>{' '}
+        <p className='mb-2'>
+          <Link href='/about'>About Us</Link>
+        </p>
         <p>© 2025 SpaceSure. All Rights Reserved</p>
       </footer>
     </div>

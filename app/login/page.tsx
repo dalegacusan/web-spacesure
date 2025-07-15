@@ -193,7 +193,6 @@ export default function LoginPage() {
           <div className='text-white/90 text-xs sm:text-sm space-y-1'>
             <p>
               <strong>Driver:</strong> driver@test.com / driver123
-              johndoe@gmail.com / Dalegacusan1234567890!!
             </p>
             <p>
               <strong>Establishment:</strong> establishment1@test.com,
@@ -215,15 +214,12 @@ export default function LoginPage() {
               Here.
             </p>
           </div>
-
-          <p className='text-white/80 text-xs'>
-            By Signing Up, You Agree to Our Terms of Service, Privacy Policy and
-            Cookie Policy.
-          </p>
         </div>
 
-        <div className='text-center mt-6 sm:mt-8 space-y-2'>
-          <p className='text-white/60 text-sm'>About Us</p>
+        <div className='text-center mt-8 space-y-2'>
+          <p className='text-white/60 text-sm mb-2'>
+            <Link href='/about'>About Us</Link>
+          </p>
           <p className='text-white/60 text-xs sm:text-sm'>
             © 2025 SpaceSure. All Rights Reserved
           </p>
