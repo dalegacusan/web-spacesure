@@ -45,6 +45,7 @@ export default function ReservationPage() {
     date: '',
     timeIn: '16:00',
     timeOut: '20:00',
+    reservationType: 'hourly', // New field for reservation type
   });
 
   const [total, setTotal] = useState(0);
@@ -83,7 +84,13 @@ export default function ReservationPage() {
 
         const data = await res.json();
         setParkingLot(data);
-        computeTotal(formData.timeIn, formData.timeOut, data.hourlyRate);
+        computeTotal(
+          formData.timeIn,
+          formData.timeOut,
+          formData.reservationType,
+          data.hourlyRate,
+          data.whole_day_rate
+        );
       } catch (err) {
         toast({
           title: 'Error loading reservation',
@@ -145,29 +152,86 @@ export default function ReservationPage() {
     fetchFeedbacks();
   }, [lotId, token, showFeedbackForm]);
 
-  const computeTotal = (timeIn: string, timeOut: string, rate: number) => {
-    const [startHour] = timeIn.split(':').map(Number);
-    const [endHour] = timeOut.split(':').map(Number);
-    const duration = Math.max(1, endHour - startHour);
-    setTotal(duration * rate);
+  const computeTotal = (
+    timeIn: string,
+    timeOut: string,
+    reservationType: string,
+    hourlyRate: number,
+    wholeDayRate: number
+  ) => {
+    if (reservationType === 'whole_day') {
+      setTotal(wholeDayRate);
+    } else {
+      const [startHour] = timeIn.split(':').map(Number);
+      const [endHour] = timeOut.split(':').map(Number);
+      const duration = Math.max(1, endHour - startHour);
+      setTotal(duration * hourlyRate);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (
-      !formData.vehicle ||
-      !formData.date ||
-      !formData.timeIn ||
-      !formData.timeOut
-    ) {
+    // Validate that selected date and time are not in the past
+    if (formData.reservationType === 'hourly') {
+      if (isTimeInPast(formData.date, formData.timeIn)) {
+        toast({
+          title: 'Invalid Time Selection',
+          description:
+            'Please select a future date and time for your reservation.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (formData.timeOut <= formData.timeIn) {
+        toast({
+          title: 'Invalid Time Selection',
+          description: 'Time out must be after time in.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    } else if (formData.reservationType === 'whole_day') {
+      if (formData.date < getCurrentDateTime().currentDate) {
+        toast({
+          title: 'Invalid Date Selection',
+          description:
+            'Please select today or a future date for your reservation.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    if (!formData.vehicle || !formData.date || !formData.reservationType) {
       toast({
         title: 'Incomplete Details',
-        description: 'Please complete all fields before submitting.',
+        description: 'Please complete all required fields before submitting.',
         variant: 'destructive',
       });
       return;
     }
+
+    // For hourly reservations, validate time fields
+    if (
+      formData.reservationType === 'hourly' &&
+      (!formData.timeIn || !formData.timeOut)
+    ) {
+      toast({
+        title: 'Incomplete Details',
+        description:
+          'Please select both time in and time out for hourly reservations.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Set default times for whole day reservations
+    const startTime =
+      formData.reservationType === 'whole_day' ? '00:00' : formData.timeIn;
+    const endTime =
+      formData.reservationType === 'whole_day' ? '23:59' : formData.timeOut;
 
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reservations`, {
       method: 'POST',
@@ -178,9 +242,9 @@ export default function ReservationPage() {
       body: JSON.stringify({
         parking_space_id: lotId,
         vehicle_id: formData.vehicle,
-        start_time: `${formData.date}T${formData.timeIn}:00.000Z`,
-        end_time: `${formData.date}T${formData.timeOut}:00.000Z`,
-        reservation_type: 'hourly',
+        start_time: `${formData.date}T${startTime}:00.000Z`,
+        end_time: `${formData.date}T${endTime}:00.000Z`,
+        reservation_type: formData.reservationType,
         hourly_rate: parkingLot.hourlyRate,
         whole_day_rate: parkingLot.whole_day_rate,
         total_price: total,
@@ -306,6 +370,22 @@ export default function ReservationPage() {
       }
     }
     return stars;
+  };
+
+  const getCurrentDateTime = () => {
+    const now = new Date();
+    const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const currentTime = now.toTimeString().slice(0, 5); // HH:MM format
+    return { currentDate, currentTime };
+  };
+
+  const isTimeInPast = (selectedDate: string, selectedTime: string) => {
+    if (!selectedDate || !selectedTime) return false;
+
+    const now = new Date();
+    const selectedDateTime = new Date(`${selectedDate}T${selectedTime}`);
+
+    return selectedDateTime < now;
   };
 
   if (
@@ -735,6 +815,7 @@ export default function ReservationPage() {
                   id='date'
                   type='date'
                   value={formData.date}
+                  min={getCurrentDateTime().currentDate}
                   onChange={(e) =>
                     setFormData({ ...formData, date: e.target.value })
                   }
@@ -743,62 +824,164 @@ export default function ReservationPage() {
                 />
               </div>
 
-              <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-                <div>
-                  <Label
-                    htmlFor='timeIn'
-                    className='text-base font-semibold mb-2 block text-gray-700'
-                  >
-                    Time In
-                  </Label>
-                  <Input
-                    id='timeIn'
-                    type='time'
-                    value={formData.timeIn}
-                    onChange={(e) => {
-                      const timeIn = e.target.value;
-                      const updatedForm = { ...formData, timeIn };
-                      setFormData(updatedForm);
+              {/* Reservation Type Selection */}
+              <div>
+                <Label
+                  htmlFor='reservationType'
+                  className='text-base font-semibold mb-2 block text-gray-700'
+                >
+                  Reservation Type
+                </Label>
+                <Select
+                  value={formData.reservationType}
+                  onValueChange={(value) => {
+                    const updatedForm = { ...formData, reservationType: value };
+                    setFormData(updatedForm);
+                    if (parkingLot) {
                       computeTotal(
                         updatedForm.timeIn,
                         updatedForm.timeOut,
-                        parkingLot.hourlyRate
+                        value,
+                        parkingLot.hourlyRate,
+                        parkingLot.whole_day_rate
                       );
-                    }}
-                    className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label
-                    htmlFor='timeOut'
-                    className='text-base font-semibold mb-2 block text-gray-700'
-                  >
-                    Time Out
-                  </Label>
-                  <Input
-                    id='timeOut'
-                    type='time'
-                    value={formData.timeOut}
-                    onChange={(e) => {
-                      const timeOut = e.target.value;
-                      const updatedForm = { ...formData, timeOut };
-                      setFormData(updatedForm);
-                      computeTotal(
-                        updatedForm.timeIn,
-                        updatedForm.timeOut,
-                        parkingLot.hourlyRate
-                      );
-                    }}
-                    className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
-                    required
-                  />
-                </div>
+                    }
+                  }}
+                >
+                  <SelectTrigger className='w-full p-3 bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'>
+                    <SelectValue placeholder='Select reservation type' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='hourly'>
+                      Hourly - ₱{parkingLot?.hourlyRate?.toFixed(2)}/hr
+                    </SelectItem>
+                    <SelectItem value='whole_day'>
+                      Whole Day - ₱{parkingLot?.whole_day_rate?.toFixed(2)}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {/* Time Selection - Only show for hourly reservations */}
+              {formData.reservationType === 'hourly' && (
+                <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+                  <div>
+                    <Label
+                      htmlFor='timeIn'
+                      className='text-base font-semibold mb-2 block text-gray-700'
+                    >
+                      Time In
+                    </Label>
+                    <Input
+                      id='timeIn'
+                      type='time'
+                      value={formData.timeIn}
+                      min={
+                        formData.date === getCurrentDateTime().currentDate
+                          ? getCurrentDateTime().currentTime
+                          : undefined
+                      }
+                      onChange={(e) => {
+                        const timeIn = e.target.value;
+                        const updatedForm = { ...formData, timeIn };
+                        setFormData(updatedForm);
+                        if (parkingLot) {
+                          computeTotal(
+                            updatedForm.timeIn,
+                            updatedForm.timeOut,
+                            updatedForm.reservationType,
+                            parkingLot.hourlyRate,
+                            parkingLot.whole_day_rate
+                          );
+                        }
+                      }}
+                      className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label
+                      htmlFor='timeOut'
+                      className='text-base font-semibold mb-2 block text-gray-700'
+                    >
+                      Time Out
+                    </Label>
+                    <Input
+                      id='timeOut'
+                      type='time'
+                      value={formData.timeOut}
+                      min={formData.timeIn}
+                      onChange={(e) => {
+                        const timeOut = e.target.value;
+                        const updatedForm = { ...formData, timeOut };
+                        setFormData(updatedForm);
+                        if (parkingLot) {
+                          computeTotal(
+                            updatedForm.timeIn,
+                            updatedForm.timeOut,
+                            updatedForm.reservationType,
+                            parkingLot.hourlyRate,
+                            parkingLot.whole_day_rate
+                          );
+                        }
+                      }}
+                      className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Whole Day Information */}
+              {formData.reservationType === 'whole_day' && (
+                <div className='bg-blue-50 border border-blue-200 rounded-xl p-4'>
+                  <div className='flex items-center space-x-2 mb-2'>
+                    <Clock className='w-5 h-5 text-blue-600' />
+                    <h3 className='font-semibold text-blue-900'>
+                      Whole Day Reservation
+                    </h3>
+                  </div>
+                  <p className='text-blue-700 text-sm'>
+                    Your vehicle can be parked from 12:00 AM to 11:59 PM on the
+                    selected date.
+                  </p>
+                </div>
+              )}
 
               <div className='bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 sm:p-6 border-2 border-blue-100'>
                 <div className='text-right'>
+                  <div className='mb-2'>
+                    <p className='text-sm text-gray-600'>
+                      {formData.reservationType === 'whole_day'
+                        ? 'Whole Day Rate'
+                        : `Hourly Rate (${
+                            formData.timeIn && formData.timeOut
+                              ? Math.max(
+                                  1,
+                                  Number.parseInt(
+                                    formData.timeOut.split(':')[0]
+                                  ) -
+                                    Number.parseInt(
+                                      formData.timeIn.split(':')[0]
+                                    )
+                                )
+                              : 1
+                          } hour${
+                            Math.max(
+                              1,
+                              Number.parseInt(
+                                formData.timeOut?.split(':')[0] || '0'
+                              ) -
+                                Number.parseInt(
+                                  formData.timeIn?.split(':')[0] || '0'
+                                )
+                            ) !== 1
+                              ? 's'
+                              : ''
+                          })`}
+                    </p>
+                  </div>
                   <p className='text-2xl sm:text-3xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent'>
                     Total: PHP {total.toFixed(2)}
                   </p>
