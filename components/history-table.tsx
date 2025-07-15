@@ -293,13 +293,13 @@ export default function HistoryTable() {
                     {item.vehicle ? (
                       <div className='text-sm text-gray-700'>
                         <div className='font-medium'>
-                          {item.vehicle.vehicle_type}
+                          {item.vehicle?.vehicle_type}
                         </div>
                         <div className='text-gray-500'>
-                          {item.vehicle.plate_number}
+                          {item.vehicle?.plate_number}
                         </div>
                         <div className='text-gray-500'>
-                          {item.vehicle.year_make_model}
+                          {item.vehicle?.year_make_model}
                         </div>
                       </div>
                     ) : (
@@ -374,13 +374,13 @@ export default function HistoryTable() {
                     {item.vehicle ? (
                       <>
                         <div className='font-semibold'>
-                          {item.vehicle.vehicle_type}
+                          {item.vehicle?.vehicle_type}
                         </div>
                         <div className='text-gray-600'>
-                          {item.vehicle.plate_number}
+                          {item.vehicle?.plate_number}
                         </div>
                         <div className='text-gray-600'>
-                          {item.vehicle.year_make_model}
+                          {item.vehicle?.year_make_model}
                         </div>
                       </>
                     ) : (

@@ -1017,11 +1017,11 @@ export default function ManageParkingSpace({
                           <div className='mt-2 text-sm text-gray-600'>
                             <div className=''>
                               <p className='text-sm text-gray-700'>
-                                Vehicle: {reservation.vehicle.year_make_model} (
-                                {reservation.vehicle.vehicle_type})
+                                Vehicle: {reservation.vehicle?.year_make_model}{' '}
+                                ({reservation.vehicle?.vehicle_type})
                               </p>
                               <p className='text-sm mt-2 text-gray-700'>
-                                Plate: {reservation.vehicle.plate_number}
+                                Plate: {reservation.vehicle?.plate_number}
                               </p>
                             </div>
                           </div>
@@ -1308,13 +1308,13 @@ export default function ManageParkingSpace({
                                 {r.vehicle ? (
                                   <div className='text-sm text-gray-700 max-w-[120px]'>
                                     <div className='font-medium truncate'>
-                                      {r.vehicle.vehicle_type}
+                                      {r.vehicle?.vehicle_type}
                                     </div>
                                     <div className='text-gray-500 truncate'>
-                                      {r.vehicle.plate_number}
+                                      {r.vehicle?.plate_number}
                                     </div>
                                     <div className='text-gray-500 truncate text-xs'>
-                                      {r.vehicle.year_make_model}
+                                      {r.vehicle?.year_make_model}
                                     </div>
                                   </div>
                                 ) : (
@@ -1441,13 +1441,13 @@ export default function ManageParkingSpace({
                               {r.vehicle ? (
                                 <>
                                   <div className='font-semibold'>
-                                    {r.vehicle.vehicle_type}
+                                    {r.vehicle?.vehicle_type}
                                   </div>
                                   <div className='text-gray-600'>
-                                    {r.vehicle.plate_number}
+                                    {r.vehicle?.plate_number}
                                   </div>
                                   <div className='text-gray-600'>
-                                    {r.vehicle.year_make_model}
+                                    {r.vehicle?.year_make_model}
                                   </div>
                                 </>
                               ) : (

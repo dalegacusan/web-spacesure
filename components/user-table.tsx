@@ -697,13 +697,13 @@ export default function UserTable({ users }: UserTableProps) {
                                       {r.vehicle ? (
                                         <div className='text-sm text-gray-700 max-w-[120px]'>
                                           <div className='font-medium truncate'>
-                                            {r.vehicle.vehicle_type}
+                                            {r.vehicle?.vehicle_type}
                                           </div>
                                           <div className='text-gray-500 truncate'>
-                                            {r.vehicle.plate_number}
+                                            {r.vehicle?.plate_number}
                                           </div>
                                           <div className='text-gray-500 truncate text-xs'>
-                                            {r.vehicle.year_make_model}
+                                            {r.vehicle?.year_make_model}
                                           </div>
                                         </div>
                                       ) : (
@@ -836,13 +836,13 @@ export default function UserTable({ users }: UserTableProps) {
                                     {r.vehicle ? (
                                       <>
                                         <div className='font-semibold'>
-                                          {r.vehicle.vehicle_type}
+                                          {r.vehicle?.vehicle_type}
                                         </div>
                                         <div className='text-gray-600'>
-                                          {r.vehicle.plate_number}
+                                          {r.vehicle?.plate_number}
                                         </div>
                                         <div className='text-gray-600'>
-                                          {r.vehicle.year_make_model}
+                                          {r.vehicle?.year_make_model}
                                         </div>
                                       </>
                                     ) : (

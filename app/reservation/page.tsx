@@ -479,7 +479,9 @@ export default function ReservationPage() {
   };
 
   const getSelectedVehicle = () => {
-    return vehicles.find((v) => v._id === formData.vehicle);
+    return vehicles
+      ? vehicles.find((v) => v._id === formData.vehicle)
+      : undefined;
   };
 
   const formatDate = (dateString: string) => {
@@ -1028,7 +1030,7 @@ export default function ReservationPage() {
                     {vehicles.length > 0 ? (
                       vehicles.map((v) => (
                         <SelectItem key={v._id} value={v._id}>
-                          {v.year_make_model} - {v.plate_number}
+                          {v?.year_make_model} - {v?.plate_number}
                         </SelectItem>
                       ))
                     ) : (

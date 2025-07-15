@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { UserRole } from '@/lib/enums/roles.enum';
-import { useRouter } from 'next/navigation';
 import {
   Activity,
   AlertCircle,
@@ -24,6 +23,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 function formatDate(dateString: string) {
@@ -389,13 +389,16 @@ export default function AdminDashboard() {
                           <div className='space-y-1 text-sm text-gray-600'>
                             <p>
                               <span className='font-medium'>Vehicle:</span>{' '}
-                              {r.vehicle.year_make_model} (
-                              {r.vehicle.vehicle_type})
+                              {r.vehicle
+                                ? `${r.vehicle.year_make_model} (${r.vehicle.vehicle_type})`
+                                : 'Unknown Vehicle'}
                             </p>
                             <p>
                               <span className='font-medium'>Plate:</span>{' '}
                               <span className='font-mono'>
-                                {r.vehicle.plate_number}
+                                {r.vehicle?.plate_number
+                                  ? r.vehicle.plate_number
+                                  : 'Unknown Plate'}
                               </span>
                             </p>
                             <div className='flex items-center space-x-1'>
