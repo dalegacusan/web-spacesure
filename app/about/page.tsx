@@ -256,9 +256,8 @@ export default function AboutPage() {
                     </p>
                     <p>
                       <strong>Long-Term Users</strong> are individuals who use
-                      the facility more frequently and are charged using daily,
-                      weekly, or monthly rates. These include employees,
-                      students, tenants, and frequent visitors.
+                      the facility more frequently and are charged using daily
+                      rate.
                     </p>
                   </div>
                 </div>
@@ -360,6 +359,10 @@ export default function AboutPage() {
                       made within 24 hours prior to the reservation.
                     </li>
                     <li>No-shows or late cancellations are non-refundable.</li>
+                    <li>
+                      Drivers must update discount priveleges on the Edit
+                      Account page.
+                    </li>
                   </ul>
                 </div>
 

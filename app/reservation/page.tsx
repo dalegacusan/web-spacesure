@@ -26,6 +26,7 @@ import {
   Home,
   MapPin,
   MessageSquare,
+  Percent,
   Send,
   Star,
   XCircle,
@@ -36,6 +37,11 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/auth.context';
 
+interface ReservedSlot {
+  date: string;
+  reserved_count: number;
+}
+
 export default function ReservationPage() {
   const searchParams = useSearchParams();
   const lotId = searchParams.get('lotId');
@@ -43,21 +49,25 @@ export default function ReservationPage() {
   const { toast } = useToast();
   const { user, token, loading } = useAuth();
 
+  console.log(user);
+
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     vehicle: '',
-    date: '',
+    dateFrom: '',
+    dateTo: '',
     timeIn: '16:00',
     timeOut: '20:00',
     reservationType: 'hourly',
   });
-
   const [total, setTotal] = useState(0);
+  const [originalTotal, setOriginalTotal] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(0);
   const [parkingLot, setParkingLot] = useState<any>(null);
+  const [reservedSlots, setReservedSlots] = useState<ReservedSlot[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [feedbackData, setFeedbackData] = useState({
     rating: 0,
     comment: '',
@@ -65,6 +75,12 @@ export default function ReservationPage() {
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [hoveredStar, setHoveredStar] = useState(0);
+  const [unavailableDates, setUnavailableDates] = useState<string[]>([]);
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
+
+  // Check if user is eligible for discount
+  const isEligibleForDiscount = user?.eligible_for_discount === true;
+  const discountPercentage = 20; // 20% discount for PWD/Senior Citizens
 
   // Redirect if not driver
   useEffect(() => {
@@ -73,7 +89,7 @@ export default function ReservationPage() {
     }
   }, [user, loading, router]);
 
-  // Fetch parking space
+  // Fetch parking space and reserved slots
   useEffect(() => {
     const fetchLot = async () => {
       if (!lotId || !token) return;
@@ -88,9 +104,32 @@ export default function ReservationPage() {
 
         if (!res.ok) throw new Error('Failed to load parking lot info');
 
+        const reservedSlotsRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/reservations/${lotId}/reserved-slots`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
         const data = await res.json();
         setParkingLot(data);
+
+        if (reservedSlotsRes.ok) {
+          const slotsData = await reservedSlotsRes.json();
+          setReservedSlots(slotsData);
+
+          // Immediately check for unavailable dates
+          const fullyBookedDates = slotsData
+            .filter(
+              (slot: ReservedSlot) => slot.reserved_count >= data.total_spaces
+            )
+            .map((slot: ReservedSlot) => slot.date);
+          setUnavailableDates(fullyBookedDates);
+        }
+
         computeTotal(
+          formData.dateFrom,
+          formData.dateTo,
           formData.timeIn,
           formData.timeOut,
           formData.reservationType,
@@ -158,20 +197,120 @@ export default function ReservationPage() {
     fetchFeedbacks();
   }, [lotId, token, showFeedbackForm]);
 
+  // Check availability based on reserved slots
+  const checkDateAvailability = (dateFrom: string, dateTo: string) => {
+    if (!dateFrom || !dateTo || !parkingLot || reservedSlots.length === 0) {
+      return;
+    }
+
+    setIsCheckingAvailability(true);
+    const unavailable: string[] = [];
+
+    // Generate array of dates in the range
+    const startDate = new Date(dateFrom);
+    const endDate = new Date(dateTo);
+    const dateArray: string[] = [];
+
+    for (
+      let d = new Date(startDate);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
+      dateArray.push(d.toISOString().split('T')[0]);
+    }
+
+    // Check each date for availability
+    dateArray.forEach((date) => {
+      const dateSlot = reservedSlots.find((slot) => slot.date === date);
+
+      // If this date is fully booked (reserved_count >= total_spaces)
+      if (dateSlot && dateSlot.reserved_count >= parkingLot.total_spaces) {
+        unavailable.push(date);
+      }
+    });
+
+    const newUnavailableDates = [
+      ...new Set([...unavailableDates, ...unavailable]),
+    ];
+    setUnavailableDates(newUnavailableDates);
+    setIsCheckingAvailability(false);
+
+    // Show warning if there are unavailable dates in the selected range
+    if (unavailable.length > 0) {
+      toast({
+        title: 'Some dates unavailable',
+        description: `${unavailable.length} date(s) in your range are fully booked. Please adjust your selection.`,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const computeTotal = (
+    dateFrom: string,
+    dateTo: string,
     timeIn: string,
     timeOut: string,
     reservationType: string,
     hourlyRate: number,
     wholeDayRate: number
   ) => {
+    if (!dateFrom || !dateTo) {
+      setOriginalTotal(0);
+      setTotal(0);
+      setDiscountAmount(0);
+      return;
+    }
+
+    const startDate = new Date(dateFrom);
+    const endDate = new Date(dateTo);
+    const daysDifference =
+      Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+      ) + 1;
+
+    // Generate array of dates in the range to check availability
+    const dateArray: string[] = [];
+    for (
+      let d = new Date(startDate);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
+      dateArray.push(d.toISOString().split('T')[0]);
+    }
+
+    // Count available days (exclude fully booked dates)
+    const availableDays = dateArray.filter(
+      (date) => !unavailableDates.includes(date)
+    ).length;
+
+    if (availableDays <= 0) {
+      setOriginalTotal(0);
+      setTotal(0);
+      setDiscountAmount(0);
+      return;
+    }
+
+    let calculatedTotal = 0;
+
     if (reservationType === 'whole_day') {
-      setTotal(wholeDayRate);
+      calculatedTotal = availableDays * wholeDayRate;
     } else {
       const [startHour] = timeIn.split(':').map(Number);
       const [endHour] = timeOut.split(':').map(Number);
-      const duration = Math.max(1, endHour - startHour);
-      setTotal(duration * hourlyRate);
+      const hoursPerDay = Math.max(1, endHour - startHour);
+      calculatedTotal = availableDays * hoursPerDay * hourlyRate;
+    }
+
+    setOriginalTotal(calculatedTotal);
+
+    // Apply discount if eligible
+    if (isEligibleForDiscount) {
+      const discount = calculatedTotal * (discountPercentage / 100);
+      setDiscountAmount(discount);
+      setTotal(calculatedTotal - discount);
+    } else {
+      setDiscountAmount(0);
+      setTotal(calculatedTotal);
     }
   };
 
@@ -195,7 +334,6 @@ export default function ReservationPage() {
     if (isTimeAfter(newTimeIn, formData.timeOut)) {
       const newTimeOut = addHoursToTime(newTimeIn, 1);
       updatedForm = { ...updatedForm, timeOut: newTimeOut };
-
       toast({
         title: 'Time Adjusted',
         description:
@@ -205,8 +343,11 @@ export default function ReservationPage() {
     }
 
     setFormData(updatedForm);
+
     if (parkingLot) {
       computeTotal(
+        updatedForm.dateFrom,
+        updatedForm.dateTo,
         updatedForm.timeIn,
         updatedForm.timeOut,
         updatedForm.reservationType,
@@ -229,8 +370,11 @@ export default function ReservationPage() {
 
     const updatedForm = { ...formData, timeOut: newTimeOut };
     setFormData(updatedForm);
+
     if (parkingLot) {
       computeTotal(
+        updatedForm.dateFrom,
+        updatedForm.dateTo,
         updatedForm.timeIn,
         updatedForm.timeOut,
         updatedForm.reservationType,
@@ -240,42 +384,194 @@ export default function ReservationPage() {
     }
   };
 
+  const handleDateFromChange = (newDateFrom: string) => {
+    // Check if the selected date is unavailable
+    if (unavailableDates.includes(newDateFrom)) {
+      toast({
+        title: 'Date Unavailable',
+        description:
+          'This date is fully booked. Please select a different date.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    let updatedForm = { ...formData, dateFrom: newDateFrom };
+
+    // If dateTo is before dateFrom, adjust dateTo to be the same as dateFrom
+    if (formData.dateTo && newDateFrom > formData.dateTo) {
+      updatedForm = { ...updatedForm, dateTo: newDateFrom };
+      toast({
+        title: 'Date Adjusted',
+        description: 'End date has been adjusted to match the start date.',
+        variant: 'default',
+      });
+    }
+
+    setFormData(updatedForm);
+
+    if (parkingLot) {
+      // Check availability when date changes
+      if (updatedForm.dateTo) {
+        checkDateAvailability(updatedForm.dateFrom, updatedForm.dateTo);
+      }
+
+      computeTotal(
+        updatedForm.dateFrom,
+        updatedForm.dateTo,
+        updatedForm.timeIn,
+        updatedForm.timeOut,
+        updatedForm.reservationType,
+        parkingLot.hourlyRate,
+        parkingLot.whole_day_rate
+      );
+    }
+  };
+
+  const handleDateToChange = (newDateTo: string) => {
+    // Check if the selected date is unavailable
+    if (unavailableDates.includes(newDateTo)) {
+      toast({
+        title: 'Date Unavailable',
+        description:
+          'This date is fully booked. Please select a different date.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (formData.dateFrom && newDateTo < formData.dateFrom) {
+      toast({
+        title: 'Invalid Date Selection',
+        description: 'End date cannot be before start date.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const updatedForm = { ...formData, dateTo: newDateTo };
+    setFormData(updatedForm);
+
+    if (parkingLot) {
+      // Check availability when date changes
+      if (updatedForm.dateFrom) {
+        checkDateAvailability(updatedForm.dateFrom, updatedForm.dateTo);
+      }
+
+      computeTotal(
+        updatedForm.dateFrom,
+        updatedForm.dateTo,
+        updatedForm.timeIn,
+        updatedForm.timeOut,
+        updatedForm.reservationType,
+        parkingLot.hourlyRate,
+        parkingLot.whole_day_rate
+      );
+    }
+  };
+
+  const handleReservationTypeChange = (value: string) => {
+    const updatedForm = { ...formData, reservationType: value };
+    setFormData(updatedForm);
+
+    if (parkingLot) {
+      computeTotal(
+        updatedForm.dateFrom,
+        updatedForm.dateTo,
+        updatedForm.timeIn,
+        updatedForm.timeOut,
+        value,
+        parkingLot.hourlyRate,
+        parkingLot.whole_day_rate
+      );
+    }
+  };
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate that selected date and time are not in the past
-    if (formData.reservationType === 'hourly') {
-      if (isTimeInPast(formData.date, formData.timeIn)) {
-        toast({
-          title: 'Invalid Time Selection',
-          description:
-            'Please select a future date and time for your reservation.',
-          variant: 'destructive',
-        });
-        return;
-      }
+    // Validate dates
+    if (!formData.dateFrom || !formData.dateTo) {
+      toast({
+        title: 'Incomplete Details',
+        description: 'Please select both start and end dates.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-      if (isTimeAfter(formData.timeIn, formData.timeOut)) {
+    if (formData.dateFrom > formData.dateTo) {
+      toast({
+        title: 'Invalid Date Selection',
+        description: 'End date must be on or after the start date.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check if any selected dates are unavailable
+    const startDate = new Date(formData.dateFrom);
+    const endDate = new Date(formData.dateTo);
+    const selectedDates: string[] = [];
+
+    for (
+      let d = new Date(startDate);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
+      selectedDates.push(d.toISOString().split('T')[0]);
+    }
+
+    const conflictingDates = selectedDates.filter((date) =>
+      unavailableDates.includes(date)
+    );
+
+    if (conflictingDates.length === selectedDates.length) {
+      toast({
+        title: 'No Available Dates',
+        description:
+          'All dates in your selected range are fully booked. Please choose different dates.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (conflictingDates.length > 0) {
+      toast({
+        title: 'Some Dates Unavailable',
+        description: `${conflictingDates.length} date(s) in your range are fully booked. Only available dates will be reserved.`,
+        variant: 'destructive',
+      });
+    }
+
+    // Validate that selected dates are not in the past
+    const currentDate = getCurrentDateTime().currentDate;
+    if (formData.dateFrom < currentDate) {
+      toast({
+        title: 'Invalid Date Selection',
+        description:
+          'Please select today or a future date for your reservation.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // For hourly reservations, validate time on the first day if it's today
+    if (
+      formData.reservationType === 'hourly' &&
+      formData.dateFrom === currentDate
+    ) {
+      if (isTimeInPast(formData.dateFrom, formData.timeIn)) {
         toast({
           title: 'Invalid Time Selection',
-          description: 'Time Out must be after Time In.',
-          variant: 'destructive',
-        });
-        return;
-      }
-    } else if (formData.reservationType === 'whole_day') {
-      if (formData.date < getCurrentDateTime().currentDate) {
-        toast({
-          title: 'Invalid Date Selection',
-          description:
-            'Please select today or a future date for your reservation.',
+          description: "Please select a future time for today's reservation.",
           variant: 'destructive',
         });
         return;
       }
     }
 
-    if (!formData.vehicle || !formData.date || !formData.reservationType) {
+    if (!formData.vehicle || !formData.reservationType) {
       toast({
         title: 'Incomplete Details',
         description: 'Please complete all required fields before submitting.',
@@ -321,12 +617,17 @@ export default function ReservationPage() {
           body: JSON.stringify({
             parking_space_id: lotId,
             vehicle_id: formData.vehicle,
-            start_time: `${formData.date}T${startTime}:00.000Z`,
-            end_time: `${formData.date}T${endTime}:00.000Z`,
+            start_time: `${formData.dateFrom}T${startTime}:00.000Z`,
+            end_time: `${formData.dateTo}T${endTime}:00.000Z`,
             reservation_type: formData.reservationType,
             hourly_rate: parkingLot.hourlyRate,
             whole_day_rate: parkingLot.whole_day_rate,
             total_price: total,
+            discount: discountAmount,
+            discount_note: isEligibleForDiscount
+              ? `${user?.discount_level} Discount (${discountPercentage}%)`
+              : null,
+            unavailable_dates: unavailableDates, // Send unavailable dates to backend
           }),
         }
       );
@@ -474,7 +775,6 @@ export default function ReservationPage() {
 
     const now = new Date();
     const selectedDateTime = new Date(`${selectedDate}T${selectedTime}`);
-
     return selectedDateTime < now;
   };
 
@@ -502,6 +802,40 @@ export default function ReservationPage() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
+  const getDaysCount = () => {
+    if (!formData.dateFrom || !formData.dateTo) return 0;
+    const startDate = new Date(formData.dateFrom);
+    const endDate = new Date(formData.dateTo);
+    return (
+      Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+      ) + 1
+    );
+  };
+
+  const getAvailableDaysCount = () => {
+    if (!formData.dateFrom || !formData.dateTo) return 0;
+
+    const startDate = new Date(formData.dateFrom);
+    const endDate = new Date(formData.dateTo);
+    const dateArray: string[] = [];
+
+    for (
+      let d = new Date(startDate);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
+      dateArray.push(d.toISOString().split('T')[0]);
+    }
+
+    return dateArray.filter((date) => !unavailableDates.includes(date)).length;
+  };
+
+  // Generate disabled dates string for date input
+  const getDisabledDatesString = () => {
+    return unavailableDates.join(',');
+  };
+
   if (
     loading ||
     !parkingLot ||
@@ -518,7 +852,6 @@ export default function ReservationPage() {
     return (
       <div className='min-h-screen bg-gradient-to-br from-red-50 via-gray-50 to-red-100'>
         <Navbar userRole='driver' userName={user?.first_name || 'User'} />
-
         <main className='max-w-4xl mx-auto px-4 sm:px-6 py-12'>
           <div className='mb-6'>
             <Button
@@ -613,7 +946,6 @@ export default function ReservationPage() {
               <Home className='w-5 h-5' />
               <span>Back to Home</span>
             </Button>
-
             <Button
               onClick={() => router.push('/parking-selection')}
               variant='outline'
@@ -673,11 +1005,9 @@ export default function ReservationPage() {
               <div className='flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mx-auto mb-4'>
                 <CheckCircle className='w-8 h-8 text-blue-600' />
               </div>
-
               <h2 className='text-2xl font-bold text-center text-gray-900 mb-2'>
                 Confirm Your Reservation
               </h2>
-
               <p className='text-gray-600 text-center mb-6'>
                 Please review your booking details before proceeding to payment.
               </p>
@@ -713,23 +1043,59 @@ export default function ReservationPage() {
                   <div className='flex items-center mb-2'>
                     <Calendar className='w-5 h-5 text-gray-500 mr-2' />
                     <span className='font-semibold text-gray-900'>
-                      Date & Time
+                      Date Range
                     </span>
                   </div>
                   <p className='text-gray-700 ml-7'>
-                    {formatDate(formData.date)}
+                    {formData.dateFrom === formData.dateTo
+                      ? formatDate(formData.dateFrom)
+                      : `${formatDate(formData.dateFrom)} - ${formatDate(
+                          formData.dateTo
+                        )}`}
+                  </p>
+                  <p className='text-sm text-gray-500 ml-7'>
+                    {getAvailableDaysCount()} available day
+                    {getAvailableDaysCount() !== 1 ? 's' : ''}
+                    {unavailableDates.length > 0 && (
+                      <span className='text-red-600'>
+                        {' '}
+                        ({unavailableDates.length} day
+                        {unavailableDates.length !== 1 ? 's' : ''} unavailable)
+                      </span>
+                    )}
                   </p>
                   {formData.reservationType === 'hourly' ? (
                     <p className='text-sm text-gray-500 ml-7'>
                       {formatTime(formData.timeIn)} -{' '}
-                      {formatTime(formData.timeOut)}
+                      {formatTime(formData.timeOut)} daily
                     </p>
                   ) : (
                     <p className='text-sm text-gray-500 ml-7'>
-                      Whole Day (12:00 AM - 11:59 PM)
+                      Whole Day (12:00 AM - 11:59 PM) daily
                     </p>
                   )}
                 </div>
+
+                {/* Discount Information */}
+                {isEligibleForDiscount && (
+                  <div className='bg-green-50 rounded-lg p-4 border border-green-200'>
+                    <div className='flex items-center mb-2'>
+                      <Percent className='w-5 h-5 text-green-600 mr-2' />
+                      <span className='font-semibold text-green-900'>
+                        {user?.discount_level} Discount Applied
+                      </span>
+                    </div>
+                    <div className='ml-7 space-y-1'>
+                      <p className='text-sm text-green-700'>
+                        Original Amount: ₱{originalTotal.toFixed(2)}
+                      </p>
+                      <p className='text-sm text-green-700'>
+                        Discount ({discountPercentage}%): -₱
+                        {discountAmount.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className='bg-blue-50 rounded-lg p-4 border border-blue-200'>
                   <div className='flex items-center justify-between'>
@@ -745,8 +1111,12 @@ export default function ReservationPage() {
                   </div>
                   <p className='text-sm text-blue-700 ml-7'>
                     {formData.reservationType === 'whole_day'
-                      ? 'Whole Day Rate'
-                      : `${Math.max(
+                      ? `${getAvailableDaysCount()} available day${
+                          getAvailableDaysCount() !== 1 ? 's' : ''
+                        } @ ₱${parkingLot.whole_day_rate}/day`
+                      : `${getAvailableDaysCount()} available day${
+                          getAvailableDaysCount() !== 1 ? 's' : ''
+                        } × ${Math.max(
                           1,
                           Number.parseInt(formData.timeOut.split(':')[0]) -
                             Number.parseInt(formData.timeIn.split(':')[0])
@@ -838,23 +1208,14 @@ export default function ReservationPage() {
 
               <div className='mt-6 space-y-2'>
                 <p className='text-sm sm:text-base text-gray-700'>
-                  Available Spaces:{' '}
+                  Total Capacity:{' '}
                   <span className='font-bold'>
-                    {parkingLot.available_spaces}/{parkingLot.total_spaces}
+                    {parkingLot.total_spaces} spaces
                   </span>
                 </p>
-                <div className='w-full bg-gray-200 rounded-full h-2'>
-                  <div
-                    className='bg-blue-600 h-2 rounded-full'
-                    style={{
-                      width: `${
-                        (parkingLot.available_spaces /
-                          parkingLot.total_spaces) *
-                        100
-                      }%`,
-                    }}
-                  ></div>
-                </div>
+                <p className='text-xs text-gray-500'>
+                  Availability varies by date and time
+                </p>
               </div>
 
               <div className='bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 sm:p-4 mt-4 space-y-2'>
@@ -873,7 +1234,6 @@ export default function ReservationPage() {
                   <Star className='w-5 h-5 mr-2 text-yellow-500' />
                   Customer Feedback
                 </h2>
-
                 {/* Only show button if feedbackEnabled is true */}
                 {parkingLot.feedbackEnabled && !showFeedbackForm && (
                   <Button
@@ -1012,6 +1372,23 @@ export default function ReservationPage() {
               RESERVATION FORM
             </h1>
 
+            {/* Discount Status Banner */}
+            {isEligibleForDiscount && (
+              <div className='bg-green-50 border border-green-200 rounded-xl p-4 mb-6'>
+                <div className='flex items-center space-x-2 mb-2'>
+                  <Percent className='w-5 h-5 text-green-600' />
+                  <h3 className='font-semibold text-green-900'>
+                    {user?.discount_level} Discount Active
+                  </h3>
+                </div>
+                <p className='text-green-700 text-sm'>
+                  You're eligible for a {discountPercentage}% discount on all
+                  reservations. The discount will be automatically applied at
+                  checkout.
+                </p>
+              </div>
+            )}
+
             <form
               onSubmit={handleFormSubmit}
               className='space-y-4 sm:space-y-6'
@@ -1046,25 +1423,95 @@ export default function ReservationPage() {
                 </Select>
               </div>
 
-              <div>
-                <Label
-                  htmlFor='date'
-                  className='text-base font-semibold mb-2 block text-gray-700'
-                >
-                  Date
-                </Label>
-                <Input
-                  id='date'
-                  type='date'
-                  value={formData.date}
-                  min={getCurrentDateTime().currentDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, date: e.target.value })
-                  }
-                  className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
-                  required
-                />
+              {/* Date Range Selection */}
+              <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+                <div>
+                  <Label
+                    htmlFor='dateFrom'
+                    className='text-base font-semibold mb-2 block text-gray-700'
+                  >
+                    Start Date
+                  </Label>
+                  <Input
+                    id='dateFrom'
+                    type='date'
+                    value={formData.dateFrom}
+                    min={getCurrentDateTime().currentDate}
+                    onChange={(e) => handleDateFromChange(e.target.value)}
+                    className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
+                    required
+                  />
+                  {unavailableDates.length > 0 && (
+                    <p className='text-xs text-red-600 mt-1'>
+                      Unavailable dates:{' '}
+                      {unavailableDates
+                        .map((date) => new Date(date).toLocaleDateString())
+                        .join(', ')}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Label
+                    htmlFor='dateTo'
+                    className='text-base font-semibold mb-2 block text-gray-700'
+                  >
+                    End Date
+                  </Label>
+                  <Input
+                    id='dateTo'
+                    type='date'
+                    value={formData.dateTo}
+                    min={formData.dateFrom || getCurrentDateTime().currentDate}
+                    onChange={(e) => handleDateToChange(e.target.value)}
+                    className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
+                    required
+                  />
+                </div>
               </div>
+
+              {/* Date Range Info */}
+              {formData.dateFrom && formData.dateTo && (
+                <div className='bg-blue-50 border border-blue-200 rounded-xl p-4'>
+                  <div className='flex items-center space-x-2 mb-2'>
+                    <Calendar className='w-5 h-5 text-blue-600' />
+                    <h3 className='font-semibold text-blue-900'>
+                      Date Range Selected
+                    </h3>
+                    {isCheckingAvailability && (
+                      <div className='animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600'></div>
+                    )}
+                  </div>
+                  <p className='text-blue-700 text-sm'>
+                    {formData.dateFrom === formData.dateTo
+                      ? `Single day reservation for ${formatDate(
+                          formData.dateFrom
+                        )}`
+                      : `${getDaysCount()} day${
+                          getDaysCount() !== 1 ? 's' : ''
+                        } from ${formatDate(formData.dateFrom)} to ${formatDate(
+                          formData.dateTo
+                        )}`}
+                  </p>
+                  {getAvailableDaysCount() !== getDaysCount() && (
+                    <div className='mt-2 p-2 bg-red-50 border border-red-200 rounded'>
+                      <p className='text-red-700 text-xs'>
+                        ⚠️ {getDaysCount() - getAvailableDaysCount()} date
+                        {getDaysCount() - getAvailableDaysCount() !== 1
+                          ? 's'
+                          : ''}{' '}
+                        in your range{' '}
+                        {getDaysCount() - getAvailableDaysCount() === 1
+                          ? 'is'
+                          : 'are'}{' '}
+                        fully booked. Only {getAvailableDaysCount()} day
+                        {getAvailableDaysCount() !== 1 ? 's' : ''} will be
+                        reserved.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <Label
@@ -1075,19 +1522,7 @@ export default function ReservationPage() {
                 </Label>
                 <Select
                   value={formData.reservationType}
-                  onValueChange={(value) => {
-                    const updatedForm = { ...formData, reservationType: value };
-                    setFormData(updatedForm);
-                    if (parkingLot) {
-                      computeTotal(
-                        updatedForm.timeIn,
-                        updatedForm.timeOut,
-                        value,
-                        parkingLot.hourlyRate,
-                        parkingLot.whole_day_rate
-                      );
-                    }
-                  }}
+                  onValueChange={handleReservationTypeChange}
                 >
                   <SelectTrigger className='w-full p-3 bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'>
                     <SelectValue placeholder='Select reservation type' />
@@ -1097,7 +1532,7 @@ export default function ReservationPage() {
                       Hourly - ₱{parkingLot?.hourlyRate?.toFixed(2)}/hr
                     </SelectItem>
                     <SelectItem value='whole_day'>
-                      Whole Day - ₱{parkingLot?.whole_day_rate?.toFixed(2)}
+                      Whole Day - ₱{parkingLot?.whole_day_rate?.toFixed(2)}/day
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -1110,14 +1545,14 @@ export default function ReservationPage() {
                       htmlFor='timeIn'
                       className='text-base font-semibold mb-2 block text-gray-700'
                     >
-                      Time In
+                      Time In (Daily)
                     </Label>
                     <Input
                       id='timeIn'
                       type='time'
                       value={formData.timeIn}
                       min={
-                        formData.date === getCurrentDateTime().currentDate
+                        formData.dateFrom === getCurrentDateTime().currentDate
                           ? getCurrentDateTime().currentTime
                           : undefined
                       }
@@ -1132,7 +1567,7 @@ export default function ReservationPage() {
                       htmlFor='timeOut'
                       className='text-base font-semibold mb-2 block text-gray-700'
                     >
-                      Time Out
+                      Time Out (Daily)
                     </Label>
                     <Input
                       id='timeOut'
@@ -1156,8 +1591,8 @@ export default function ReservationPage() {
                     </h3>
                   </div>
                   <p className='text-blue-700 text-sm'>
-                    Your vehicle can be parked from 12:00 AM to 11:59 PM on the
-                    selected date.
+                    Your vehicle can be parked from 12:00 AM to 11:59 PM each
+                    day during your selected date range.
                   </p>
                 </div>
               )}
@@ -1167,8 +1602,12 @@ export default function ReservationPage() {
                   <div className='mb-2'>
                     <p className='text-sm text-gray-600'>
                       {formData.reservationType === 'whole_day'
-                        ? 'Whole Day Rate'
-                        : `Hourly Rate (${
+                        ? `Whole Day Rate × ${getAvailableDaysCount()} available day${
+                            getAvailableDaysCount() !== 1 ? 's' : ''
+                          }`
+                        : `Hourly Rate × ${getAvailableDaysCount()} available day${
+                            getAvailableDaysCount() !== 1 ? 's' : ''
+                          } × ${
                             formData.timeIn && formData.timeOut
                               ? Math.max(
                                   1,
@@ -1192,18 +1631,48 @@ export default function ReservationPage() {
                             ) !== 1
                               ? 's'
                               : ''
-                          })`}
+                          }`}
                     </p>
                   </div>
+
+                  {/* Show discount breakdown if eligible */}
+                  {isEligibleForDiscount && originalTotal > 0 && (
+                    <div className='mb-4 space-y-1'>
+                      <div className='flex justify-between text-sm text-gray-600'>
+                        <span>Original Amount:</span>
+                        <span>₱{originalTotal.toFixed(2)}</span>
+                      </div>
+                      <div className='flex justify-between text-sm text-green-600'>
+                        <span>
+                          {user?.discount_level} Discount ({discountPercentage}
+                          %):
+                        </span>
+                        <span>-₱{discountAmount.toFixed(2)}</span>
+                      </div>
+                      <hr className='border-gray-300' />
+                    </div>
+                  )}
+
                   <p className='text-2xl sm:text-3xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent'>
                     Total: PHP {total.toFixed(2)}
+                    {isEligibleForDiscount && (
+                      <span className='text-sm text-green-600 block'>
+                        (You saved ₱{discountAmount.toFixed(2)}!)
+                      </span>
+                    )}
                   </p>
-
                   <Button
                     type='submit'
-                    className='w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 text-lg rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200'
+                    disabled={
+                      getAvailableDaysCount() <= 0 || isCheckingAvailability
+                    }
+                    className='w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 text-lg rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
                   >
-                    Review Reservation
+                    {getAvailableDaysCount() <= 0
+                      ? 'No Available Dates'
+                      : isCheckingAvailability
+                      ? 'Checking Availability...'
+                      : 'Review Reservation'}
                   </Button>
                 </div>
               </div>

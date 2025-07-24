@@ -5,10 +5,14 @@ import { createContext, useContext, useEffect, useState } from 'react';
 interface User {
   _id: string;
   first_name: string;
+  middle_name?: string;
   last_name: string;
   email: string;
   role: string;
   phone_number?: string;
+  eligible_for_discount: boolean;
+  discount_level?: string | null;
+  discount_id?: string | null;
 }
 
 interface AuthContextType {

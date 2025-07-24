@@ -3,7 +3,7 @@
 import type React from 'react';
 
 import { useAuth } from '@/app/context/auth.context';
-import { ParkingSpace } from '@/app/establishment/manage/[id]/page';
+import type { ParkingSpace } from '@/app/establishment/manage/[id]/page';
 import Navbar from '@/components/navbar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,17 @@ import { useToast } from '@/hooks/use-toast';
 import { AvailabilityStatus } from '@/lib/enums/availability-status.enum';
 import { UserRole } from '@/lib/enums/roles.enum';
 import { UserStatus } from '@/lib/enums/user-status.enum';
-import { Building, MapPin, Plus, Search, User, X } from 'lucide-react';
+import {
+  Building,
+  Check,
+  CreditCard,
+  MapPin,
+  Percent,
+  Plus,
+  Search,
+  User,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -49,6 +59,8 @@ export default function EditUserPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
   const [isUnassigning, setIsUnassigning] = useState<string | null>(null);
+  const [isApprovingDiscount, setIsApprovingDiscount] = useState(false);
+  const [isDecliningDiscount, setIsDecliningDiscount] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     middleName: '',
@@ -58,6 +70,9 @@ export default function EditUserPage() {
     role: '',
     status: '',
     assigned_parking_spaces: [],
+    eligibleForDiscount: false,
+    discountLevel: null,
+    discountId: null,
   });
 
   const fetchAvailableParkingSpaces = async () => {
@@ -70,7 +85,6 @@ export default function EditUserPage() {
           },
         }
       );
-
       if (availableRes.ok) {
         const availableSpaces = await availableRes.json();
         setUnassignedParkingSpaces(availableSpaces);
@@ -122,6 +136,9 @@ export default function EditUserPage() {
           role: u.role || '',
           status: u.status || '',
           assigned_parking_spaces: u.assigned_parking_spaces,
+          eligibleForDiscount: u.eligible_for_discount || false,
+          discountLevel: u.discount_level || null,
+          discountId: u.discount_id || null,
         });
         setAssignedParkingSpaces(u.assigned_parking_spaces || []);
         setFormLoaded(true);
@@ -184,10 +201,34 @@ export default function EditUserPage() {
     }
   }, [formData.role, formLoaded, token, params.id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (
+    e?: React.FormEvent,
+    overrideDiscount?: {
+      eligibleForDiscount: boolean;
+      discountLevel: string | null;
+    }
+  ) => {
+    if (e) e.preventDefault();
+
     try {
       const userId = params.id as string;
+      const reqBody = {
+        first_name: formData.firstName,
+        middle_name: formData.middleName,
+        last_name: formData.lastName,
+        email: formData.email,
+        phone_number: formData.phoneNumber,
+        role: formData.role,
+        status: formData.status,
+        eligible_for_discount: overrideDiscount
+          ? overrideDiscount.eligibleForDiscount
+          : formData.eligibleForDiscount,
+        discount_level: overrideDiscount
+          ? overrideDiscount.discountLevel
+          : formData.discountLevel,
+        discount_id: formData.discountId,
+      };
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/users/${userId}`,
         {
@@ -196,15 +237,7 @@ export default function EditUserPage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            first_name: formData.firstName,
-            middle_name: formData.middleName,
-            last_name: formData.lastName,
-            email: formData.email,
-            phone_number: formData.phoneNumber,
-            role: formData.role,
-            status: formData.status,
-          }),
+          body: JSON.stringify(reqBody),
         }
       );
 
@@ -218,6 +251,13 @@ export default function EditUserPage() {
         description: 'User information has been successfully updated.',
         variant: 'success',
       });
+
+      // Optionally refresh formData to reflect new state
+      setFormData((prev) => ({
+        ...prev,
+        eligibleForDiscount: reqBody.eligible_for_discount,
+        discountLevel: reqBody.discount_level,
+      }));
     } catch (error: any) {
       toast({
         title: 'Update Failed',
@@ -254,7 +294,6 @@ export default function EditUserPage() {
       const spaceToMove = availableParkingSpaces.find(
         (space) => space._id === parkingSpaceId
       );
-
       if (spaceToMove) {
         setAvailableParkingSpaces((prev) =>
           prev.filter((space) => space._id !== parkingSpaceId)
@@ -306,7 +345,6 @@ export default function EditUserPage() {
       const spaceToMove = assignedParkingSpaces.find(
         (space) => space.parking_space._id === parkingSpaceId
       );
-
       if (spaceToMove) {
         setAssignedParkingSpaces((prev) =>
           prev.filter((space) => space.parking_space._id !== parkingSpaceId)
@@ -340,11 +378,9 @@ export default function EditUserPage() {
 
   const filteredAvailableSpaces = () => {
     const query = searchQuery.trim().toLowerCase();
-
     if (query === '') {
       return unassignedParkingSpaces;
     }
-
     return unassignedParkingSpaces.filter((space) => {
       const name = space.establishment_name?.toLowerCase() || '';
       const address = space.address?.toLowerCase() || '';
@@ -363,6 +399,32 @@ export default function EditUserPage() {
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getDiscountStatusBadge = () => {
+    if (formData.eligibleForDiscount && formData.discountLevel) {
+      return (
+        <Badge className='bg-green-100 text-green-800'>
+          Approved -{' '}
+          {formData.discountLevel === 'PWD' ? 'PWD' : 'Senior Citizen'} (20%
+          discount)
+        </Badge>
+      );
+    } else if (
+      formData.discountLevel &&
+      formData.discountId &&
+      !formData.eligibleForDiscount
+    ) {
+      return (
+        <Badge className='bg-yellow-100 text-yellow-800'>
+          Pending Approval
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge className='bg-gray-100 text-gray-800'>No Discount Applied</Badge>
+      );
     }
   };
 
@@ -457,29 +519,6 @@ export default function EditUserPage() {
                   </div>
 
                   <div>
-                    <Label htmlFor='role'>User Role</Label>
-                    <Select
-                      value={formData.role}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, role: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder='Select user role' />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={UserRole.DRIVER}>Driver</SelectItem>
-                        <SelectItem value={UserRole.ADMIN}>
-                          Establishment
-                        </SelectItem>
-                        <SelectItem value={UserRole.SUPER_ADMIN}>
-                          Admin
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
                     <Label htmlFor='status'>Account Status</Label>
                     <Select
                       value={formData.status}
@@ -500,6 +539,102 @@ export default function EditUserPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Discount Management Section - Only show for driver users */}
+                  {formData.role === UserRole.DRIVER && (
+                    <div className='border-t pt-6'>
+                      <div className='space-y-4'>
+                        <div>
+                          <Label className='text-lg font-medium mb-2 block'>
+                            <Percent className='w-5 h-5 inline mr-2' />
+                            Discount Management
+                          </Label>
+                          <div className='mb-4'>{getDiscountStatusBadge()}</div>
+                        </div>
+
+                        {/* Show discount details if user has submitted discount info */}
+                        {formData.discountLevel && formData.discountId && (
+                          <div className='bg-gray-50 border border-gray-200 rounded-lg p-4'>
+                            <div className='space-y-3'>
+                              <div>
+                                <Label className='text-sm font-medium text-gray-700'>
+                                  Discount Type:
+                                </Label>
+                                <p className='text-sm text-gray-900'>
+                                  {formData.discountLevel === 'PWD'
+                                    ? 'PWD ID'
+                                    : 'Senior Citizen ID'}{' '}
+                                  (20% discount)
+                                </p>
+                              </div>
+                              <div>
+                                <Label className='text-sm font-medium text-gray-700'>
+                                  <CreditCard className='w-4 h-4 inline mr-1' />
+                                  ID Number:
+                                </Label>
+                                <p className='text-sm text-gray-900 font-mono'>
+                                  {formData.discountId}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Approval/Decline buttons - only show if not yet approved */}
+                            {!formData.eligibleForDiscount && (
+                              <div className='flex space-x-3 mt-4'>
+                                <Button
+                                  type='button'
+                                  onClick={() =>
+                                    handleSubmit(undefined, {
+                                      eligibleForDiscount: true,
+                                      discountLevel: formData.discountLevel,
+                                    })
+                                  }
+                                  disabled={isApprovingDiscount}
+                                  className='flex-1 bg-green-600 hover:bg-green-700 text-white'
+                                >
+                                  {isApprovingDiscount ? (
+                                    <>
+                                      <div className='animate-spin h-4 w-4 mr-2 border border-white border-t-transparent rounded-full' />
+                                      Approving...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check className='w-4 h-4 mr-2' />
+                                      Approve Discount
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  type='button'
+                                  onClick={() =>
+                                    handleSubmit(undefined, {
+                                      eligibleForDiscount: false,
+                                      discountLevel: null,
+                                    })
+                                  }
+                                  disabled={isDecliningDiscount}
+                                  variant='outline'
+                                  className='flex-1 border-red-300 text-red-600 hover:bg-red-50 bg-transparent'
+                                >
+                                  {isDecliningDiscount ? (
+                                    <>
+                                      <div className='animate-spin h-4 w-4 mr-2 border border-red-600 border-t-transparent rounded-full' />
+                                      Declining...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <X className='w-4 h-4 mr-2' />
+                                      Decline
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className='flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 pt-6'>

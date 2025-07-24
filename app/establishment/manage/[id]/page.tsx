@@ -27,7 +27,6 @@ import {
   Calendar,
   Car,
   CheckCircle,
-  Clock,
   DollarSign,
   Loader2,
   MapPin,
@@ -35,7 +34,6 @@ import {
   Search,
   Settings,
   Star,
-  TrendingUp,
   Users,
   XCircle,
 } from 'lucide-react';
@@ -736,7 +734,7 @@ export default function ManageParkingSpace({
             {/* Quick Stats */}
             {analytics && (
               <>
-                <div className='grid grid-cols-1 md:grid-cols-4 gap-6'>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                   <Card className='bg-white'>
                     <CardContent className='p-6'>
                       <div className='flex items-center space-x-2'>
@@ -760,34 +758,6 @@ export default function ManageParkingSpace({
                             {analytics.totalReservations}
                           </div>
                           <p className='text-gray-600'>Total Reservations</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className='bg-white'>
-                    <CardContent className='p-6'>
-                      <div className='flex items-center space-x-2'>
-                        <TrendingUp className='h-5 w-5 text-purple-600' />
-                        <div>
-                          <div className='text-2xl font-bold'>
-                            {analytics.averageOccupancy}%
-                          </div>
-                          <p className='text-gray-600'>Avg. Occupancy</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className='bg-white'>
-                    <CardContent className='p-6'>
-                      <div className='flex items-center space-x-2'>
-                        <Clock className='h-5 w-5 text-orange-600' />
-                        <div>
-                          <div className='text-lg font-bold'>
-                            {analytics.peakHour}
-                          </div>
-                          <p className='text-gray-600'>Peak Hour</p>
                         </div>
                       </div>
                     </CardContent>
@@ -854,63 +824,6 @@ export default function ManageParkingSpace({
                 </CardContent>
               </Card>
             </div>
-
-            {/* Occupancy Chart */}
-            <Card className='bg-white'>
-              <CardHeader>
-                <CardTitle>Space Utilization</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className='space-y-4'>
-                  <div className='flex justify-between items-center'>
-                    <span className='text-sm font-medium'>Occupancy Rate</span>
-                    <span className='text-sm text-gray-600'>
-                      {Math.round(
-                        ((parkingSpace.total_spaces -
-                          parkingSpace.available_spaces) /
-                          parkingSpace.total_spaces) *
-                          100
-                      )}
-                      %
-                    </span>
-                  </div>
-                  <div className='w-full bg-gray-200 rounded-full h-3'>
-                    <div
-                      className='bg-blue-600 h-3 rounded-full transition-all duration-300'
-                      style={{
-                        width: `${
-                          ((parkingSpace.total_spaces -
-                            parkingSpace.available_spaces) /
-                            parkingSpace.total_spaces) *
-                          100
-                        }%`,
-                      }}
-                    ></div>
-                  </div>
-                  <div className='grid grid-cols-3 gap-4 text-sm'>
-                    <div className='text-center'>
-                      <div className='font-semibold text-green-600'>
-                        {parkingSpace.available_spaces}
-                      </div>
-                      <div className='text-gray-600'>Available</div>
-                    </div>
-                    <div className='text-center'>
-                      <div className='font-semibold text-red-600'>
-                        {parkingSpace.total_spaces -
-                          parkingSpace.available_spaces}
-                      </div>
-                      <div className='text-gray-600'>Occupied</div>
-                    </div>
-                    <div className='text-center'>
-                      <div className='font-semibold'>
-                        {parkingSpace.total_spaces}
-                      </div>
-                      <div className='text-gray-600'>Total</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
             {/* Recent Activity */}
             <Card className='bg-white'>

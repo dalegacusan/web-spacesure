@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +19,7 @@ export default function RegisterPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [showDataPolicy, setShowDataPolicy] = useState(false);
   const [showTermsOfService, setShowTermsOfService] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     middleName: '',
@@ -76,6 +78,17 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
+    if (!agreedToTerms) {
+      toast({
+        title: 'Agreement Required',
+        description:
+          'Please agree to the Terms of Service and Privacy Policy to continue.',
+        variant: 'destructive',
+      });
+      setIsLoading(false);
+      return;
+    }
 
     if (formData.password !== formData.confirmPassword) {
       toast({
@@ -367,9 +380,8 @@ export default function RegisterPage() {
                     </p>
                     <p>
                       <strong>Long-Term Users</strong> are individuals who use
-                      the facility more frequently and are charged using daily,
-                      weekly, or monthly rates. These include employees,
-                      students, tenants, and frequent visitors.
+                      the facility more frequently and are charged using daily
+                      rate.
                     </p>
                   </div>
                 </div>
@@ -471,6 +483,10 @@ export default function RegisterPage() {
                       made within 24 hours prior to the reservation.
                     </li>
                     <li>No-shows or late cancellations are non-refundable.</li>
+                    <li>
+                      Drivers must update discount priveleges on the Edit
+                      Account page.
+                    </li>
                   </ul>
                 </div>
 
@@ -708,10 +724,44 @@ export default function RegisterPage() {
             </div>
           </div>
 
+          {/* Agreement Checkbox */}
+          <div className='flex items-start space-x-3 pt-4'>
+            <Checkbox
+              id='agreement'
+              checked={agreedToTerms}
+              onCheckedChange={(checked) =>
+                setAgreedToTerms(checked as boolean)
+              }
+              className='mt-1 border-white data-[state=checked]:bg-[#2A3A7C] data-[state=checked]:border-[#2A3A7C]'
+            />
+            <Label
+              htmlFor='agreement'
+              className='text-white/90 text-xs leading-relaxed cursor-pointer'
+            >
+              I agree to the{' '}
+              <button
+                type='button'
+                onClick={() => setShowTermsOfService(true)}
+                className='underline font-semibold hover:text-white'
+              >
+                Terms of Service
+              </button>
+              ,{' '}
+              <button
+                type='button'
+                onClick={() => setShowDataPolicy(true)}
+                className='underline font-semibold hover:text-white'
+              >
+                Privacy Policy
+              </button>{' '}
+              and Cookie Policy. *
+            </Label>
+          </div>
+
           <Button
             type='submit'
-            disabled={isLoading}
-            className='w-full bg-[#2A3A7C] hover:bg-[#1F2A5C] text-white text-sm py-2.5 rounded disabled:opacity-50 mt-6'
+            disabled={isLoading || !agreedToTerms}
+            className='w-full bg-[#2A3A7C] hover:bg-[#1F2A5C] text-white text-sm py-2.5 rounded disabled:opacity-50 disabled:cursor-not-allowed mt-6'
           >
             {isLoading ? 'Creating Account...' : 'REGISTER'}
           </Button>
@@ -727,24 +777,6 @@ export default function RegisterPage() {
               Here.
             </p>
           </div>
-
-          <p className='text-white/80 text-xs'>
-            By Signing Up, You Agree to Our{' '}
-            <button
-              onClick={() => setShowTermsOfService(true)}
-              className='underline font-semibold hover:text-white cursor-pointer'
-            >
-              Terms of Service
-            </button>
-            ,{' '}
-            <button
-              onClick={() => setShowDataPolicy(true)}
-              className='underline font-semibold hover:text-white cursor-pointer'
-            >
-              Privacy Policy
-            </button>{' '}
-            and Cookie Policy.
-          </p>
         </div>
 
         <div className='text-center mt-6 space-y-2'>

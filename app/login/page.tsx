@@ -192,7 +192,7 @@ export default function LoginPage() {
           </h3>
           <div className='text-white/90 text-xs sm:text-sm space-y-1'>
             <p>
-              <strong>Driver:</strong> driver@test.com / driver123
+              <strong>Driver:</strong> driver@test.com / admin123
             </p>
             <p>
               <strong>Establishment:</strong> establishment1@test.com,
