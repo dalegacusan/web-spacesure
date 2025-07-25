@@ -16,7 +16,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { AvailabilityStatus } from '@/lib/enums/availability-status.enum';
 import { UserRole } from '@/lib/enums/roles.enum';
-import { formatDateToLong } from '@/lib/utils';
 import { formatInTimeZone } from 'date-fns-tz';
 import {
   AlertTriangle,
@@ -1318,11 +1317,7 @@ export default function ReservationPage() {
               {/* Simple Capacity Display */}
               <div className='mt-6 space-y-2'>
                 <p className='text-sm sm:text-base text-gray-700'>
-                  Available Spaces on{' '}
-                  {formatDateToLong(
-                    formData.dateFrom || new Date().toISOString().split('T')[0]
-                  )}
-                  :{' '}
+                  Available spaces on selected date :{' '}
                   <span className='font-bold'>
                     {(() => {
                       const targetDate =
