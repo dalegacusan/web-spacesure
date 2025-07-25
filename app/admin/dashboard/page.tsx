@@ -81,21 +81,17 @@ export default function AdminDashboard() {
   function formatDateRange(start: string, end: string) {
     const startDate = new Date(start);
     const endDate = new Date(end);
-
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
-
     const displayDate =
       startDateStr === endDateStr
         ? formatDateToLong(startDateStr)
         : `${formatDateToLong(startDateStr)} to ${formatDateToLong(
             endDateStr
           )}`;
-
     const timeRange = `${formatUtcTo12HourTime(
       start
     )} to ${formatUtcTo12HourTime(end)}`;
-
     return `${displayDate} — ${timeRange}`;
   }
 
@@ -204,71 +200,95 @@ export default function AdminDashboard() {
 
         {/* Statistics Cards */}
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8'>
-          <Card className='bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105'>
-            <CardContent className='p-6'>
-              <div className='flex items-center justify-between'>
-                <div>
-                  <p className='text-blue-100 text-sm font-medium'>
-                    Total Users
-                  </p>
-                  <p className='text-3xl font-bold'>{total_users}</p>
+          {/* Total Users Card - Clickable */}
+          <div
+            onClick={() => router.push('/admin/users')}
+            className='cursor-pointer'
+          >
+            <Card className='bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105'>
+              <CardContent className='p-6'>
+                <div className='flex items-center justify-between'>
+                  <div>
+                    <p className='text-blue-100 text-sm font-medium'>
+                      Total Users
+                    </p>
+                    <p className='text-3xl font-bold'>{total_users}</p>
+                  </div>
+                  <div className='bg-white/20 p-3 rounded-full'>
+                    <Users className='h-6 w-6' />
+                  </div>
                 </div>
-                <div className='bg-white/20 p-3 rounded-full'>
-                  <Users className='h-6 w-6' />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
-          <Card className='bg-gradient-to-r from-green-500 to-green-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105'>
-            <CardContent className='p-6'>
-              <div className='flex items-center justify-between'>
-                <div>
-                  <p className='text-green-100 text-sm font-medium'>
-                    Establishments
-                  </p>
-                  <p className='text-3xl font-bold'>{total_establishments}</p>
+          {/* Establishments Card - Clickable */}
+          <div
+            onClick={() => router.push('/admin/parking-management')}
+            className='cursor-pointer'
+          >
+            <Card className='bg-gradient-to-r from-green-500 to-green-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105'>
+              <CardContent className='p-6'>
+                <div className='flex items-center justify-between'>
+                  <div>
+                    <p className='text-green-100 text-sm font-medium'>
+                      Establishments
+                    </p>
+                    <p className='text-3xl font-bold'>{total_establishments}</p>
+                  </div>
+                  <div className='bg-white/20 p-3 rounded-full'>
+                    <Building2 className='h-6 w-6' />
+                  </div>
                 </div>
-                <div className='bg-white/20 p-3 rounded-full'>
-                  <Building2 className='h-6 w-6' />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
-          <Card className='bg-gradient-to-r from-purple-500 to-purple-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105'>
-            <CardContent className='p-6'>
-              <div className='flex items-center justify-between'>
-                <div>
-                  <p className='text-purple-100 text-sm font-medium'>
-                    Reservations
-                  </p>
-                  <p className='text-3xl font-bold'>{total_reservations}</p>
+          {/* Reservations Card - Clickable */}
+          <div
+            onClick={() => router.push('/admin/reservations')}
+            className='cursor-pointer'
+          >
+            <Card className='bg-gradient-to-r from-purple-500 to-purple-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105'>
+              <CardContent className='p-6'>
+                <div className='flex items-center justify-between'>
+                  <div>
+                    <p className='text-purple-100 text-sm font-medium'>
+                      Reservations
+                    </p>
+                    <p className='text-3xl font-bold'>{total_reservations}</p>
+                  </div>
+                  <div className='bg-white/20 p-3 rounded-full'>
+                    <Calendar className='h-6 w-6' />
+                  </div>
                 </div>
-                <div className='bg-white/20 p-3 rounded-full'>
-                  <Calendar className='h-6 w-6' />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
-          <Card className='bg-gradient-to-r from-orange-500 to-orange-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105'>
-            <CardContent className='p-6'>
-              <div className='flex items-center justify-between'>
-                <div>
-                  <p className='text-orange-100 text-sm font-medium'>
-                    Total Revenue
-                  </p>
-                  <p className='text-3xl font-bold'>
-                    ₱{total_revenue.toFixed(2)}
-                  </p>
+          {/* Total Revenue Card - Clickable */}
+          <div
+            onClick={() => router.push('/admin/payment-history')}
+            className='cursor-pointer'
+          >
+            <Card className='bg-gradient-to-r from-orange-500 to-orange-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105'>
+              <CardContent className='p-6'>
+                <div className='flex items-center justify-between'>
+                  <div>
+                    <p className='text-orange-100 text-sm font-medium'>
+                      Total Revenue
+                    </p>
+                    <p className='text-3xl font-bold'>
+                      ₱{total_revenue.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className='bg-white/20 p-3 rounded-full'>
+                    <DollarSign className='h-6 w-6' />
+                  </div>
                 </div>
-                <div className='bg-white/20 p-3 rounded-full'>
-                  <DollarSign className='h-6 w-6' />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         <div className='grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8'>
