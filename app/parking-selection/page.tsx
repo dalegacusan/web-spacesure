@@ -170,17 +170,6 @@ export default function ParkingSelectionPage() {
                         className='w-full h-48 sm:h-64 object-cover'
                       />
                       <div className='absolute inset-0 bg-gradient-to-t from-black/20 to-transparent' />
-                      <div
-                        className={`absolute bottom-3 sm:bottom-4 left-3 sm:left-4 right-3 sm:right-4 ${getAvailabilityColor(
-                          lot.slots_status,
-                          lot.availability_status
-                        )} text-white text-center py-2 sm:py-3 rounded-lg font-bold shadow-lg text-sm sm:text-base`}
-                      >
-                        {getAvailabilityText(
-                          lot.slots_status,
-                          lot.availability_status
-                        )}
-                      </div>
                     </div>
 
                     <div className='p-4 sm:p-6 flex flex-col flex-grow'>

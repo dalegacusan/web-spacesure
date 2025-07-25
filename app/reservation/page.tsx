@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { AvailabilityStatus } from '@/lib/enums/availability-status.enum';
 import { UserRole } from '@/lib/enums/roles.enum';
+import { formatDateToLong } from '@/lib/utils';
 import { formatInTimeZone } from 'date-fns-tz';
 import {
   AlertTriangle,
@@ -1317,11 +1318,26 @@ export default function ReservationPage() {
               {/* Simple Capacity Display */}
               <div className='mt-6 space-y-2'>
                 <p className='text-sm sm:text-base text-gray-700'>
-                  Total Capacity:{' '}
+                  Available Spaces on{' '}
+                  {formatDateToLong(
+                    formData.dateFrom || new Date().toISOString().split('T')[0]
+                  )}
+                  :{' '}
                   <span className='font-bold'>
-                    {parkingLot.total_spaces} spaces
+                    {(() => {
+                      const targetDate =
+                        formData.dateFrom ||
+                        new Date().toISOString().split('T')[0];
+                      const reservedForStartDate =
+                        reservedSlots.find((slot) => slot.date === targetDate)
+                          ?.reserved_count || 0;
+                      const available =
+                        parkingLot.available_spaces - reservedForStartDate;
+                      return `${available} space${available !== 1 ? 's' : ''}`;
+                    })()}
                   </span>
                 </p>
+
                 <p className='text-xs text-gray-500'>
                   Availability varies by date and time
                 </p>
