@@ -49,8 +49,6 @@ export default function ReservationPage() {
   const { toast } = useToast();
   const { user, token, loading } = useAuth();
 
-  console.log(user);
-
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     vehicle: '',
@@ -118,10 +116,11 @@ export default function ReservationPage() {
           const slotsData = await reservedSlotsRes.json();
           setReservedSlots(slotsData);
 
-          // Immediately check for unavailable dates
+          // Check for unavailable dates where reserved_count equals available_spaces
           const fullyBookedDates = slotsData
             .filter(
-              (slot: ReservedSlot) => slot.reserved_count >= data.total_spaces
+              (slot: ReservedSlot) =>
+                slot.reserved_count >= data.available_spaces
             )
             .map((slot: ReservedSlot) => slot.date);
           setUnavailableDates(fullyBookedDates);
@@ -223,8 +222,8 @@ export default function ReservationPage() {
     dateArray.forEach((date) => {
       const dateSlot = reservedSlots.find((slot) => slot.date === date);
 
-      // If this date is fully booked (reserved_count >= total_spaces)
-      if (dateSlot && dateSlot.reserved_count >= parkingLot.total_spaces) {
+      // If this date is fully booked (reserved_count >= available_spaces)
+      if (dateSlot && dateSlot.reserved_count >= parkingLot.available_spaces) {
         unavailable.push(date);
       }
     });
@@ -298,6 +297,7 @@ export default function ReservationPage() {
       const [startHour] = timeIn.split(':').map(Number);
       const [endHour] = timeOut.split(':').map(Number);
       const hoursPerDay = Math.max(1, endHour - startHour);
+
       calculatedTotal = availableDays * hoursPerDay * hourlyRate;
     }
 
@@ -831,7 +831,6 @@ export default function ReservationPage() {
     return dateArray.filter((date) => !unavailableDates.includes(date)).length;
   };
 
-  // Generate disabled dates string for date input
   const getDisabledDatesString = () => {
     return unavailableDates.join(',');
   };
@@ -1206,11 +1205,18 @@ export default function ReservationPage() {
                 <p className='text-base sm:text-lg'>{parkingLot.address}</p>
               </div>
 
+              {/* Simple Capacity Display */}
               <div className='mt-6 space-y-2'>
                 <p className='text-sm sm:text-base text-gray-700'>
                   Total Capacity:{' '}
                   <span className='font-bold'>
                     {parkingLot.total_spaces} spaces
+                  </span>
+                </p>
+                <p className='text-sm sm:text-base text-gray-700'>
+                  Available Spaces:{' '}
+                  <span className='font-bold'>
+                    {parkingLot.available_spaces} spaces
                   </span>
                 </p>
                 <p className='text-xs text-gray-500'>
