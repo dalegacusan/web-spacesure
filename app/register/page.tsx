@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { UserRole } from '@/lib/enums/roles.enum';
 import { Eye, EyeOff, FileText, Shield } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type React from 'react';
@@ -554,15 +555,20 @@ export default function RegisterPage() {
       )}
 
       <div className='bg-[#3B4A9C] p-6 sm:p-8 w-full max-w-md'>
-        <div className='text-center mb-6 sm:mb-8'>
-          <h1 className='text-3xl sm:text-4xl font-bold text-white mb-2'>
-            SPACE
-            <br />
-            SURE
-          </h1>
-          <p className='text-white/80 text-sm sm:text-base mt-4'>
-            Create Your Account
-          </p>
+        <div
+          style={{
+            display: 'block',
+            margin: 'auto',
+            width: '50%',
+            marginBottom: '32px',
+          }}
+        >
+          <Image
+            src='SPACESURE_WHITE.png'
+            height={200}
+            width={200}
+            alt='logo'
+          />
         </div>
 
         <form onSubmit={handleSubmit} className='space-y-4'>
