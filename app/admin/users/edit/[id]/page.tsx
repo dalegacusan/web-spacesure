@@ -205,10 +205,10 @@ export default function EditUserPage() {
     overrideDiscount?: {
       eligibleForDiscount: boolean;
       discountLevel: string | null;
+      discountId?: string | null;
     }
   ) => {
     if (e) e.preventDefault();
-
     try {
       const userId = params.id as string;
       const reqBody = {
@@ -225,7 +225,7 @@ export default function EditUserPage() {
         discount_level: overrideDiscount
           ? overrideDiscount.discountLevel
           : formData.discountLevel,
-        discount_id: formData.discountId,
+        discount_id: overrideDiscount?.discountId ?? formData.discountId,
       };
 
       const response = await fetch(
@@ -586,6 +586,7 @@ export default function EditUserPage() {
                                     handleSubmit(undefined, {
                                       eligibleForDiscount: true,
                                       discountLevel: formData.discountLevel,
+                                      discountId: formData.discountId,
                                     })
                                   }
                                   disabled={isApprovingDiscount}
@@ -609,6 +610,7 @@ export default function EditUserPage() {
                                     handleSubmit(undefined, {
                                       eligibleForDiscount: false,
                                       discountLevel: null,
+                                      discount_id: null,
                                     })
                                   }
                                   disabled={isDecliningDiscount}
