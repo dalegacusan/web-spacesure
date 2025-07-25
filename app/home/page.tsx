@@ -51,6 +51,10 @@ export default function HomePage() {
     setFilteredAreas([]); // Hide dropdown
   };
 
+  const handleViewAllParkingSpaces = () => {
+    router.push('/parking-selection');
+  };
+
   useEffect(() => {
     if (!loading && !user) {
       router.replace('/login');
@@ -77,6 +81,7 @@ export default function HomePage() {
         setFilteredAreas([]);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -86,6 +91,7 @@ export default function HomePage() {
   return (
     <div className='min-h-screen bg-slate-200'>
       <Navbar />
+
       <main className='max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12'>
         <div
           style={{
@@ -166,6 +172,20 @@ export default function HomePage() {
                   </Button>
                 ))}
               </div>
+            </div>
+
+            {/* View All Parking Spaces Button */}
+            <div className='mt-8 pt-6 border-t border-white/20'>
+              <p className='text-white text-base sm:text-lg mb-4'>
+                or browse all available parking spaces
+              </p>
+              <Button
+                onClick={handleViewAllParkingSpaces}
+                variant='outline'
+                className='bg-transparent border-2 border-white text-white hover:bg-white hover:text-blue-900 px-8 py-3 text-base sm:text-lg rounded-full font-semibold shadow-lg transition-all duration-200'
+              >
+                View All Parking Spaces
+              </Button>
             </div>
           </div>
         </div>

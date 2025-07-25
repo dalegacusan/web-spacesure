@@ -92,9 +92,6 @@ export function CustomDatePicker({
       const day = String(date.getDate()).padStart(2, '0');
       const dateString = `${year}-${month}-${day}`;
 
-      console.log('Selected date object:', date);
-      console.log('Formatted date string:', dateString);
-
       // Double-check that the selected date is not unavailable
       if (unavailableDates.includes(dateString)) {
         console.warn(`Attempted to select unavailable date: ${dateString}`);
