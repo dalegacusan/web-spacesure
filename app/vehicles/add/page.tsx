@@ -18,19 +18,20 @@ import { UserRole } from '@/lib/enums/roles.enum';
 import { Car } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 
 export default function AddVehiclePage() {
   const { user, token, loading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
-
   const [formData, setFormData] = useState({
     vehicleType: '',
     yearMakeModel: '',
     color: '',
     plateNumber: '',
   });
+  const [plateError, setPlateError] = useState('');
 
   useEffect(() => {
     if (!loading && (!user || user.role !== UserRole.DRIVER)) {
@@ -38,8 +39,39 @@ export default function AddVehiclePage() {
     }
   }, [user, loading, router, token]);
 
+  const validatePlateNumber = (plateNumber: string) => {
+    const cleanPlate = plateNumber.replace(/\s+/g, ''); // Remove spaces
+    if (cleanPlate.length < 5) {
+      return 'Plate number must be at least 5 characters';
+    }
+    if (cleanPlate.length > 7) {
+      return 'Plate number must not exceed 7 characters';
+    }
+    return '';
+  };
+
+  const handlePlateNumberChange = (value: string) => {
+    const upperValue = value.toUpperCase();
+    setFormData({ ...formData, plateNumber: upperValue });
+
+    const error = validatePlateNumber(upperValue);
+    setPlateError(error);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Final validation before submit
+    const plateValidationError = validatePlateNumber(formData.plateNumber);
+    if (plateValidationError) {
+      setPlateError(plateValidationError);
+      toast({
+        title: 'Validation Error',
+        description: plateValidationError,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/vehicles`, {
@@ -87,6 +119,13 @@ export default function AddVehiclePage() {
   if (loading || !user) {
     return null; // prevent flashing
   }
+
+  const isFormValid =
+    formData.vehicleType &&
+    formData.yearMakeModel &&
+    formData.color &&
+    formData.plateNumber &&
+    !plateError;
 
   return (
     <div className='min-h-screen bg-gray-50'>
@@ -185,15 +224,24 @@ export default function AddVehiclePage() {
                   type='text'
                   placeholder='e.g., ABC 123'
                   value={formData.plateNumber}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      plateNumber: e.target.value.toUpperCase(),
-                    })
-                  }
-                  className='w-full p-4 text-lg border-2 border-gray-200 rounded-lg hover:border-blue-300 transition-colors'
+                  onChange={(e) => handlePlateNumberChange(e.target.value)}
+                  className={`w-full p-4 text-lg border-2 rounded-lg hover:border-blue-300 transition-colors ${
+                    plateError
+                      ? 'border-red-300 focus:border-red-500'
+                      : 'border-gray-200'
+                  }`}
+                  maxLength={8} // Allow for spaces
                   required
                 />
+                {plateError && (
+                  <p className='text-red-600 text-sm mt-2 flex items-center'>
+                    <span className='mr-1'>⚠️</span>
+                    {plateError}
+                  </p>
+                )}
+                <p className='text-gray-500 text-sm mt-2'>
+                  Plate number must be 5-7 characters long
+                </p>
               </div>
 
               <div className='flex space-x-4 pt-6'>
@@ -207,7 +255,12 @@ export default function AddVehiclePage() {
                 </Button>
                 <Button
                   type='submit'
-                  className='flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg font-semibold'
+                  disabled={!isFormValid}
+                  className={`flex-1 py-3 text-lg font-semibold ${
+                    isFormValid
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                 >
                   Add Vehicle
                 </Button>

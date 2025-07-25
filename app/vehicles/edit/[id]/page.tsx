@@ -1,5 +1,7 @@
 'use client';
 
+import type React from 'react';
+
 import { useAuth } from '@/app/context/auth.context';
 import Navbar from '@/components/navbar';
 import { Button } from '@/components/ui/button';
@@ -25,13 +27,13 @@ export default function EditVehiclePage() {
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
-
   const [formData, setFormData] = useState({
     vehicleType: '',
     yearMakeModel: '',
     color: '',
     plateNumber: '',
   });
+  const [plateError, setPlateError] = useState('');
 
   useEffect(() => {
     if (!loading && (!user || user.role !== UserRole.DRIVER)) {
@@ -50,8 +52,8 @@ export default function EditVehiclePage() {
         );
 
         if (!res.ok) throw new Error('Vehicle not found');
-        const data = await res.json();
 
+        const data = await res.json();
         setFormData({
           vehicleType: data.vehicle_type || '',
           yearMakeModel: data.year_make_model || '',
@@ -74,8 +76,39 @@ export default function EditVehiclePage() {
     }
   }, [user, loading, params.id, router, toast, token]);
 
+  const validatePlateNumber = (plateNumber: string) => {
+    const cleanPlate = plateNumber.replace(/\s+/g, ''); // Remove spaces
+    if (cleanPlate.length < 5) {
+      return 'Plate number must be at least 5 characters';
+    }
+    if (cleanPlate.length > 7) {
+      return 'Plate number must not exceed 7 characters';
+    }
+    return '';
+  };
+
+  const handlePlateNumberChange = (value: string) => {
+    const upperValue = value.toUpperCase();
+    setFormData({ ...formData, plateNumber: upperValue });
+
+    const error = validatePlateNumber(upperValue);
+    setPlateError(error);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Final validation before submit
+    const plateValidationError = validatePlateNumber(formData.plateNumber);
+    if (plateValidationError) {
+      setPlateError(plateValidationError);
+      toast({
+        title: 'Validation Error',
+        description: plateValidationError,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
       const res = await fetch(
@@ -122,6 +155,13 @@ export default function EditVehiclePage() {
 
   if (loading || !user) return null;
 
+  const isFormValid =
+    formData.vehicleType &&
+    formData.yearMakeModel &&
+    formData.color &&
+    formData.plateNumber &&
+    !plateError;
+
   return (
     <div className='min-h-screen bg-gray-50'>
       <Navbar />
@@ -142,14 +182,19 @@ export default function EditVehiclePage() {
             <CardContent className='p-8'>
               <form onSubmit={handleSubmit} className='space-y-6'>
                 <div>
-                  <Label htmlFor='vehicleType'>Vehicle Type</Label>
+                  <Label
+                    htmlFor='vehicleType'
+                    className='text-lg font-medium mb-3 block text-gray-700'
+                  >
+                    Vehicle Type
+                  </Label>
                   <Select
                     value={formData.vehicleType}
                     onValueChange={(value) =>
                       setFormData({ ...formData, vehicleType: value })
                     }
                   >
-                    <SelectTrigger className='w-full'>
+                    <SelectTrigger className='w-full p-4 text-lg border-2 border-gray-200 rounded-lg hover:border-blue-300 transition-colors'>
                       <SelectValue placeholder='Select vehicle type' />
                     </SelectTrigger>
                     <SelectContent>
@@ -164,10 +209,16 @@ export default function EditVehiclePage() {
                 </div>
 
                 <div>
-                  <Label htmlFor='yearMakeModel'>Year, Make & Model</Label>
+                  <Label
+                    htmlFor='yearMakeModel'
+                    className='text-lg font-medium mb-3 block text-gray-700'
+                  >
+                    Year, Make & Model
+                  </Label>
                   <Input
                     id='yearMakeModel'
                     type='text'
+                    placeholder='e.g., 2020 Toyota Camry'
                     value={formData.yearMakeModel}
                     onChange={(e) =>
                       setFormData({
@@ -175,37 +226,61 @@ export default function EditVehiclePage() {
                         yearMakeModel: e.target.value,
                       })
                     }
+                    className='w-full p-4 text-lg border-2 border-gray-200 rounded-lg hover:border-blue-300 transition-colors'
                     required
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor='color'>Color</Label>
+                  <Label
+                    htmlFor='color'
+                    className='text-lg font-medium mb-3 block text-gray-700'
+                  >
+                    Color
+                  </Label>
                   <Input
                     id='color'
                     type='text'
+                    placeholder='e.g., White'
                     value={formData.color}
                     onChange={(e) =>
                       setFormData({ ...formData, color: e.target.value })
                     }
+                    className='w-full p-4 text-lg border-2 border-gray-200 rounded-lg hover:border-blue-300 transition-colors'
                     required
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor='plateNumber'>Plate Number</Label>
+                  <Label
+                    htmlFor='plateNumber'
+                    className='text-lg font-medium mb-3 block text-gray-700'
+                  >
+                    Plate Number
+                  </Label>
                   <Input
                     id='plateNumber'
                     type='text'
+                    placeholder='e.g., ABC 123'
                     value={formData.plateNumber}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        plateNumber: e.target.value.toUpperCase(),
-                      })
-                    }
+                    onChange={(e) => handlePlateNumberChange(e.target.value)}
+                    className={`w-full p-4 text-lg border-2 rounded-lg hover:border-blue-300 transition-colors ${
+                      plateError
+                        ? 'border-red-300 focus:border-red-500'
+                        : 'border-gray-200'
+                    }`}
+                    maxLength={8} // Allow for spaces
                     required
                   />
+                  {plateError && (
+                    <p className='text-red-600 text-sm mt-2 flex items-center'>
+                      <span className='mr-1'>⚠️</span>
+                      {plateError}
+                    </p>
+                  )}
+                  <p className='text-gray-500 text-sm mt-2'>
+                    Plate number must be 5-7 characters long
+                  </p>
                 </div>
 
                 <div className='flex space-x-4 pt-6'>
@@ -213,13 +288,18 @@ export default function EditVehiclePage() {
                     type='button'
                     onClick={handleBack}
                     variant='outline'
-                    className='flex-1'
+                    className='flex-1 py-3 text-lg border-gray-300 text-gray-600 hover:bg-gray-50'
                   >
                     Cancel
                   </Button>
                   <Button
                     type='submit'
-                    className='flex-1 bg-blue-600 text-white'
+                    disabled={!isFormValid}
+                    className={`flex-1 py-3 text-lg font-semibold ${
+                      isFormValid
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
                   >
                     Update Vehicle
                   </Button>
