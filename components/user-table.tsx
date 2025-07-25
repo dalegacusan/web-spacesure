@@ -20,6 +20,7 @@ import { PaymentStatus } from '@/lib/enums/payment-status.enum';
 import { ReservationStatus } from '@/lib/enums/reservation-status.enum';
 import type { UserRole } from '@/lib/enums/roles.enum';
 import { UserStatus } from '@/lib/enums/user-status.enum';
+import { formatDateToLong, formatUtcTo12HourTime } from '@/lib/utils';
 import {
   AlertTriangle,
   CheckCircle,
@@ -656,18 +657,34 @@ export default function UserTable({ users }: UserTableProps) {
                             </thead>
                             <tbody className='bg-white divide-y divide-gray-200'>
                               {filteredModalReservations.map((r) => {
-                                const start = new Date(r.start_time);
-                                const end = new Date(r.end_time);
-                                const timeRange = `${start.toLocaleTimeString(
-                                  [],
-                                  {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  }
-                                )} - ${end.toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}`;
+                                function formatDateRange(
+                                  start: string,
+                                  end: string
+                                ) {
+                                  const startDate = new Date(start);
+                                  const endDate = new Date(end);
+
+                                  const startDateISO = startDate
+                                    .toISOString()
+                                    .split('T')[0];
+                                  const endDateISO = endDate
+                                    .toISOString()
+                                    .split('T')[0];
+
+                                  const displayDate =
+                                    startDateISO === endDateISO
+                                      ? formatDateToLong(startDateISO)
+                                      : `${formatDateToLong(
+                                          startDateISO
+                                        )} to ${formatDateToLong(endDateISO)}`;
+
+                                  return `${displayDate}`;
+                                }
+
+                                const timeRange = `${formatUtcTo12HourTime(
+                                  r.start_time
+                                )} – ${formatUtcTo12HourTime(r.end_time)}`;
+
                                 const paymentStatus =
                                   r.payments?.[0]?.payment_status;
 
@@ -713,7 +730,10 @@ export default function UserTable({ users }: UserTableProps) {
                                     <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
                                       <div className='max-w-[120px]'>
                                         <div>
-                                          {start.toISOString().split('T')[0]}
+                                          {formatDateRange(
+                                            r.start_time,
+                                            r.end_time
+                                          )}
                                         </div>
                                         <div className='text-xs text-gray-400 truncate'>
                                           {timeRange}

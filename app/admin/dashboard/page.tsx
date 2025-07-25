@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { UserRole } from '@/lib/enums/roles.enum';
+import { formatDateToLong, formatUtcTo12HourTime } from '@/lib/utils';
 import {
   Activity,
   AlertCircle,
@@ -80,22 +81,22 @@ export default function AdminDashboard() {
   function formatDateRange(start: string, end: string) {
     const startDate = new Date(start);
     const endDate = new Date(end);
-    const datePart = startDate.toLocaleDateString('en-PH', {
-      month: 'numeric',
-      day: 'numeric',
-      year: 'numeric',
-    });
-    const startTime = startDate.toLocaleTimeString('en-PH', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-    const endTime = endDate.toLocaleTimeString('en-PH', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-    return `${datePart} - ${startTime} to ${endTime}`;
+
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+
+    const displayDate =
+      startDateStr === endDateStr
+        ? formatDateToLong(startDateStr)
+        : `${formatDateToLong(startDateStr)} to ${formatDateToLong(
+            endDateStr
+          )}`;
+
+    const timeRange = `${formatUtcTo12HourTime(
+      start
+    )} to ${formatUtcTo12HourTime(end)}`;
+
+    return `${displayDate} — ${timeRange}`;
   }
 
   useEffect(() => {
@@ -396,9 +397,7 @@ export default function AdminDashboard() {
                             <p>
                               <span className='font-medium'>Plate:</span>{' '}
                               <span className='font-mono'>
-                                {r.vehicle?.plate_number
-                                  ? r.vehicle?.plate_number
-                                  : 'Unknown Plate'}
+                                {r.vehicle?.plate_number ?? 'Unknown Plate'}
                               </span>
                             </p>
                             <div className='flex items-center space-x-1'>

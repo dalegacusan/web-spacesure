@@ -21,6 +21,7 @@ import { AvailabilityStatus } from '@/lib/enums/availability-status.enum';
 import { PaymentStatus } from '@/lib/enums/payment-status.enum';
 import { ReservationStatus } from '@/lib/enums/reservation-status.enum';
 import { UserRole } from '@/lib/enums/roles.enum';
+import { formatDateToLong, formatUtcTo12HourTime } from '@/lib/utils';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -858,31 +859,38 @@ export default function ManageParkingSpace({
                         </Badge>
                       </div>
 
-                      {/* Main content with padding-right to avoid badge overlap */}
                       <div className='pr-20'>
                         <p className='font-medium'>
                           Reservation #{reservation._id}
                         </p>
                         <p className='text-sm text-gray-600'>
-                          {new Date(
-                            reservation.start_time
-                          ).toLocaleDateString()}{' '}
-                          -{' '}
-                          {new Date(reservation.start_time).toLocaleTimeString(
-                            [],
-                            {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            }
-                          )}{' '}
-                          to{' '}
-                          {new Date(reservation.end_time).toLocaleTimeString(
-                            [],
-                            {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            }
-                          )}
+                          {(() => {
+                            const start = new Date(reservation.start_time);
+                            const end = new Date(reservation.end_time);
+
+                            const startDateStr = start
+                              .toISOString()
+                              .split('T')[0];
+                            const endDateStr = end.toISOString().split('T')[0];
+
+                            const dateLabel =
+                              startDateStr === endDateStr
+                                ? formatDateToLong(startDateStr)
+                                : `${formatDateToLong(
+                                    startDateStr
+                                  )} to ${formatDateToLong(endDateStr)}`;
+
+                            const timeLabel =
+                              reservation.reservation_type === 'whole_day'
+                                ? '12:00 AM - 11:59 PM'
+                                : `${formatUtcTo12HourTime(
+                                    reservation.start_time
+                                  )} - ${formatUtcTo12HourTime(
+                                    reservation.end_time
+                                  )}`;
+
+                            return `${dateLabel} · ${timeLabel}`;
+                          })()}
                         </p>
 
                         {reservation.payments?.length > 0 && (
@@ -896,7 +904,11 @@ export default function ManageParkingSpace({
                                 {payment.payment_status} on{' '}
                                 {new Date(
                                   payment.payment_date
-                                ).toLocaleDateString()}
+                                ).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric',
+                                })}
                                 {payment.receipt_number ? (
                                   <>
                                     {' '}
@@ -1192,13 +1204,26 @@ export default function ManageParkingSpace({
                         {filteredReservations.map((r) => {
                           const start = new Date(r.start_time);
                           const end = new Date(r.end_time);
-                          const timeRange = `${start.toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })} - ${end.toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}`;
+
+                          const startDateStr = start
+                            .toISOString()
+                            .split('T')[0];
+                          const endDateStr = end.toISOString().split('T')[0];
+
+                          const timeRange =
+                            r.reservation_type === 'whole_day'
+                              ? '12:00 AM - 11:59 PM'
+                              : `${formatUtcTo12HourTime(
+                                  r.start_time
+                                )} - ${formatUtcTo12HourTime(r.end_time)}`;
+
+                          const displayDate =
+                            startDateStr === endDateStr
+                              ? formatDateToLong(startDateStr)
+                              : `${formatDateToLong(
+                                  startDateStr
+                                )} to ${formatDateToLong(endDateStr)}`;
+
                           const paymentStatus =
                             r.payments?.[0]?.payment_status || 'pending';
 
@@ -1236,7 +1261,7 @@ export default function ManageParkingSpace({
                               </td>
                               <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
                                 <div className='max-w-[120px]'>
-                                  <div>{start.toISOString().split('T')[0]}</div>
+                                  <div>{displayDate}</div>
                                   <div className='text-xs text-gray-400 truncate'>
                                     {timeRange}
                                   </div>
@@ -1291,13 +1316,24 @@ export default function ManageParkingSpace({
                   {filteredReservations.map((r) => {
                     const start = new Date(r.start_time);
                     const end = new Date(r.end_time);
-                    const timeRange = `${start.toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })} - ${end.toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}`;
+
+                    const startDateStr = start.toISOString().split('T')[0];
+                    const endDateStr = end.toISOString().split('T')[0];
+
+                    const timeRange =
+                      r.reservation_type === 'whole_day'
+                        ? '12:00 AM - 11:59 PM'
+                        : `${formatUtcTo12HourTime(
+                            r.start_time
+                          )} - ${formatUtcTo12HourTime(r.end_time)}`;
+
+                    const displayDate =
+                      startDateStr === endDateStr
+                        ? formatDateToLong(startDateStr)
+                        : `${formatDateToLong(
+                            startDateStr
+                          )} to ${formatDateToLong(endDateStr)}`;
+
                     const paymentStatus =
                       r.payments?.[0]?.payment_status || 'pending';
 
@@ -1373,7 +1409,7 @@ export default function ManageParkingSpace({
                               <span className='font-medium text-gray-500'>
                                 Date:
                               </span>
-                              <p>{start.toISOString().split('T')[0]}</p>
+                              <p>{displayDate}</p>
                             </div>
                             <div>
                               <span className='font-medium text-gray-500'>
