@@ -1317,7 +1317,7 @@ export default function ReservationPage() {
               {/* Simple Capacity Display */}
               <div className='mt-6 space-y-2'>
                 <p className='text-sm sm:text-base text-gray-700'>
-                  Available spaces on selected date :{' '}
+                  Available spaces on selected date:{' '}
                   <span className='font-bold'>
                     {(() => {
                       const targetDate =
