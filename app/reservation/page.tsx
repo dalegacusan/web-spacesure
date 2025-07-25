@@ -1,5 +1,6 @@
 'use client';
 
+import { CustomDatePicker } from '@/components/custom-date-picker';
 import Navbar from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { AvailabilityStatus } from '@/lib/enums/availability-status.enum';
 import { UserRole } from '@/lib/enums/roles.enum';
+import { formatInTimeZone } from 'date-fns-tz';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -41,6 +43,8 @@ interface ReservedSlot {
   date: string;
   reserved_count: number;
 }
+
+const TIMEZONE = 'Asia/Singapore';
 
 export default function ReservationPage() {
   const searchParams = useSearchParams();
@@ -80,6 +84,17 @@ export default function ReservationPage() {
   const isEligibleForDiscount = user?.eligible_for_discount === true;
   const discountPercentage = 20; // 20% discount for PWD/Senior Citizens
 
+  // Get current date and time in Singapore timezone
+  const getCurrentDateTime = () => {
+    const now = new Date();
+    const singaporeTime = new Date(
+      now.toLocaleString('en-US', { timeZone: TIMEZONE })
+    );
+    const currentDate = singaporeTime.toISOString().split('T')[0];
+    const currentTime = singaporeTime.toTimeString().slice(0, 5);
+    return { currentDate, currentTime };
+  };
+
   // Redirect if not driver
   useEffect(() => {
     if (!loading && (!user || user.role !== UserRole.DRIVER)) {
@@ -116,13 +131,18 @@ export default function ReservationPage() {
           const slotsData = await reservedSlotsRes.json();
           setReservedSlots(slotsData);
 
-          // Check for unavailable dates where reserved_count equals available_spaces
+          // Calculate unavailable dates
           const fullyBookedDates = slotsData
             .filter(
               (slot: ReservedSlot) =>
                 slot.reserved_count >= data.available_spaces
             )
             .map((slot: ReservedSlot) => slot.date);
+
+          console.log('Available spaces:', data.available_spaces);
+          console.log('Reserved slots:', slotsData);
+          console.log('Fully booked dates:', fullyBookedDates);
+
           setUnavailableDates(fullyBookedDates);
         }
 
@@ -196,18 +216,15 @@ export default function ReservationPage() {
     fetchFeedbacks();
   }, [lotId, token, showFeedbackForm]);
 
-  // Check availability based on reserved slots
-  const checkDateAvailability = (dateFrom: string, dateTo: string) => {
-    if (!dateFrom || !dateTo || !parkingLot || reservedSlots.length === 0) {
-      return;
-    }
+  // Check if date range contains unavailable dates
+  const hasUnavailableDatesInRange = (
+    dateFrom: string,
+    dateTo: string
+  ): string[] => {
+    if (!dateFrom || !dateTo) return [];
 
-    setIsCheckingAvailability(true);
-    const unavailable: string[] = [];
-
-    // Generate array of dates in the range
-    const startDate = new Date(dateFrom);
-    const endDate = new Date(dateTo);
+    const startDate = new Date(dateFrom + 'T00:00:00');
+    const endDate = new Date(dateTo + 'T00:00:00');
     const dateArray: string[] = [];
 
     for (
@@ -215,30 +232,33 @@ export default function ReservationPage() {
       d <= endDate;
       d.setDate(d.getDate() + 1)
     ) {
-      dateArray.push(d.toISOString().split('T')[0]);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      dateArray.push(`${year}-${month}-${day}`);
     }
 
-    // Check each date for availability
-    dateArray.forEach((date) => {
-      const dateSlot = reservedSlots.find((slot) => slot.date === date);
+    return dateArray.filter((date) => unavailableDates.includes(date));
+  };
 
-      // If this date is fully booked (reserved_count >= available_spaces)
-      if (dateSlot && dateSlot.reserved_count >= parkingLot.available_spaces) {
-        unavailable.push(date);
-      }
-    });
+  // Check availability based on reserved slots - only block if truly full
+  const checkDateAvailability = (dateFrom: string, dateTo: string) => {
+    if (!dateFrom || !dateTo || !parkingLot || reservedSlots.length === 0) {
+      return;
+    }
 
-    const newUnavailableDates = [
-      ...new Set([...unavailableDates, ...unavailable]),
-    ];
-    setUnavailableDates(newUnavailableDates);
+    setIsCheckingAvailability(true);
+
+    // Check for unavailable dates in the selected range
+    const unavailableInRange = hasUnavailableDatesInRange(dateFrom, dateTo);
+
     setIsCheckingAvailability(false);
 
     // Show warning if there are unavailable dates in the selected range
-    if (unavailable.length > 0) {
+    if (unavailableInRange.length > 0) {
       toast({
-        title: 'Some dates unavailable',
-        description: `${unavailable.length} date(s) in your range are fully booked. Please adjust your selection.`,
+        title: 'Invalid Date Range',
+        description: `Your selected range contains ${unavailableInRange.length} fully booked date(s). Please select a different range without gaps.`,
         variant: 'destructive',
       });
     }
@@ -260,8 +280,8 @@ export default function ReservationPage() {
       return;
     }
 
-    const startDate = new Date(dateFrom);
-    const endDate = new Date(dateTo);
+    const startDate = new Date(dateFrom + 'T00:00:00');
+    const endDate = new Date(dateTo + 'T00:00:00');
     const daysDifference =
       Math.ceil(
         (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -274,7 +294,10 @@ export default function ReservationPage() {
       d <= endDate;
       d.setDate(d.getDate() + 1)
     ) {
-      dateArray.push(d.toISOString().split('T')[0]);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      dateArray.push(`${year}-${month}-${day}`);
     }
 
     // Count available days (exclude fully booked dates)
@@ -385,6 +408,8 @@ export default function ReservationPage() {
   };
 
   const handleDateFromChange = (newDateFrom: string) => {
+    console.log('handleDateFromChange called with:', newDateFrom);
+
     // Check if the selected date is unavailable
     if (unavailableDates.includes(newDateFrom)) {
       toast({
@@ -408,6 +433,23 @@ export default function ReservationPage() {
       });
     }
 
+    // Check if the date range contains unavailable dates
+    if (updatedForm.dateTo) {
+      const unavailableInRange = hasUnavailableDatesInRange(
+        updatedForm.dateFrom,
+        updatedForm.dateTo
+      );
+      if (unavailableInRange.length > 0) {
+        toast({
+          title: 'Invalid Date Range',
+          description:
+            'Your selected range contains fully booked dates. Please select consecutive available dates only.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     setFormData(updatedForm);
 
     if (parkingLot) {
@@ -429,6 +471,8 @@ export default function ReservationPage() {
   };
 
   const handleDateToChange = (newDateTo: string) => {
+    console.log('handleDateToChange called with:', newDateTo);
+
     // Check if the selected date is unavailable
     if (unavailableDates.includes(newDateTo)) {
       toast({
@@ -447,6 +491,23 @@ export default function ReservationPage() {
         variant: 'destructive',
       });
       return;
+    }
+
+    // Check if the date range contains unavailable dates
+    if (formData.dateFrom) {
+      const unavailableInRange = hasUnavailableDatesInRange(
+        formData.dateFrom,
+        newDateTo
+      );
+      if (unavailableInRange.length > 0) {
+        toast({
+          title: 'Invalid Date Range',
+          description:
+            'Your selected range contains fully booked dates. Please select consecutive available dates only.',
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     const updatedForm = { ...formData, dateTo: newDateTo };
@@ -510,41 +571,21 @@ export default function ReservationPage() {
     }
 
     // Check if any selected dates are unavailable
-    const startDate = new Date(formData.dateFrom);
-    const endDate = new Date(formData.dateTo);
-    const selectedDates: string[] = [];
-
-    for (
-      let d = new Date(startDate);
-      d <= endDate;
-      d.setDate(d.getDate() + 1)
-    ) {
-      selectedDates.push(d.toISOString().split('T')[0]);
-    }
-
-    const conflictingDates = selectedDates.filter((date) =>
-      unavailableDates.includes(date)
+    const unavailableInRange = hasUnavailableDatesInRange(
+      formData.dateFrom,
+      formData.dateTo
     );
 
-    if (conflictingDates.length === selectedDates.length) {
+    if (unavailableInRange.length > 0) {
       toast({
-        title: 'No Available Dates',
-        description:
-          'All dates in your selected range are fully booked. Please choose different dates.',
+        title: 'Invalid Date Range',
+        description: `Your selected range contains ${unavailableInRange.length} fully booked date(s). Please select consecutive available dates only.`,
         variant: 'destructive',
       });
       return;
     }
 
-    if (conflictingDates.length > 0) {
-      toast({
-        title: 'Some Dates Unavailable',
-        description: `${conflictingDates.length} date(s) in your range are fully booked. Only available dates will be reserved.`,
-        variant: 'destructive',
-      });
-    }
-
-    // Validate that selected dates are not in the past
+    // Validate that selected dates are not in the past (Singapore time)
     const currentDate = getCurrentDateTime().currentDate;
     if (formData.dateFrom < currentDate) {
       toast({
@@ -556,7 +597,7 @@ export default function ReservationPage() {
       return;
     }
 
-    // For hourly reservations, validate time on the first day if it's today
+    // For hourly reservations, validate time on the first day if it's today (Singapore time)
     if (
       formData.reservationType === 'hourly' &&
       formData.dateFrom === currentDate
@@ -606,6 +647,22 @@ export default function ReservationPage() {
       const endTime =
         formData.reservationType === 'whole_day' ? '23:59' : formData.timeOut;
 
+      // Convert dates to Singapore timezone for API
+      const startDateTime = new Date(`${formData.dateFrom}T${startTime}:00`);
+      const endDateTime = new Date(`${formData.dateTo}T${endTime}:00`);
+
+      // Format as Singapore timezone ISO string
+      const startTimeISO = formatInTimeZone(
+        startDateTime,
+        TIMEZONE,
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+      );
+      const endTimeISO = formatInTimeZone(
+        endDateTime,
+        TIMEZONE,
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+      );
+
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/reservations`,
         {
@@ -617,8 +674,8 @@ export default function ReservationPage() {
           body: JSON.stringify({
             parking_space_id: lotId,
             vehicle_id: formData.vehicle,
-            start_time: `${formData.dateFrom}T${startTime}:00.000Z`,
-            end_time: `${formData.dateTo}T${endTime}:00.000Z`,
+            start_time: startTimeISO,
+            end_time: endTimeISO,
             reservation_type: formData.reservationType,
             hourly_rate: parkingLot.hourlyRate,
             whole_day_rate: parkingLot.whole_day_rate,
@@ -628,6 +685,7 @@ export default function ReservationPage() {
               ? `${user?.discount_level} Discount (${discountPercentage}%)`
               : null,
             unavailable_dates: unavailableDates, // Send unavailable dates to backend
+            timezone: TIMEZONE, // Send timezone info to backend
           }),
         }
       );
@@ -763,19 +821,17 @@ export default function ReservationPage() {
     return stars;
   };
 
-  const getCurrentDateTime = () => {
-    const now = new Date();
-    const currentDate = now.toISOString().split('T')[0];
-    const currentTime = now.toTimeString().slice(0, 5);
-    return { currentDate, currentTime };
-  };
-
   const isTimeInPast = (selectedDate: string, selectedTime: string) => {
     if (!selectedDate || !selectedTime) return false;
 
-    const now = new Date();
+    // Create date in Singapore timezone
     const selectedDateTime = new Date(`${selectedDate}T${selectedTime}`);
-    return selectedDateTime < now;
+    const now = new Date();
+    const singaporeNow = new Date(
+      now.toLocaleString('en-US', { timeZone: TIMEZONE })
+    );
+
+    return selectedDateTime < singaporeNow;
   };
 
   const getSelectedVehicle = () => {
@@ -785,13 +841,8 @@ export default function ReservationPage() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    const date = new Date(dateString + 'T00:00:00');
+    return formatInTimeZone(date, TIMEZONE, 'EEEE, MMMM d, yyyy');
   };
 
   const formatTime = (timeString: string) => {
@@ -804,8 +855,8 @@ export default function ReservationPage() {
 
   const getDaysCount = () => {
     if (!formData.dateFrom || !formData.dateTo) return 0;
-    const startDate = new Date(formData.dateFrom);
-    const endDate = new Date(formData.dateTo);
+    const startDate = new Date(formData.dateFrom + 'T00:00:00');
+    const endDate = new Date(formData.dateTo + 'T00:00:00');
     return (
       Math.ceil(
         (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -816,8 +867,8 @@ export default function ReservationPage() {
   const getAvailableDaysCount = () => {
     if (!formData.dateFrom || !formData.dateTo) return 0;
 
-    const startDate = new Date(formData.dateFrom);
-    const endDate = new Date(formData.dateTo);
+    const startDate = new Date(formData.dateFrom + 'T00:00:00');
+    const endDate = new Date(formData.dateTo + 'T00:00:00');
     const dateArray: string[] = [];
 
     for (
@@ -825,14 +876,35 @@ export default function ReservationPage() {
       d <= endDate;
       d.setDate(d.getDate() + 1)
     ) {
-      dateArray.push(d.toISOString().split('T')[0]);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      dateArray.push(`${year}-${month}-${day}`);
     }
 
     return dateArray.filter((date) => !unavailableDates.includes(date)).length;
   };
 
-  const getDisabledDatesString = () => {
-    return unavailableDates.join(',');
+  // Get unavailable days count only for the selected date range
+  const getUnavailableDaysInRange = () => {
+    if (!formData.dateFrom || !formData.dateTo) return 0;
+
+    const startDate = new Date(formData.dateFrom + 'T00:00:00');
+    const endDate = new Date(formData.dateTo + 'T00:00:00');
+    const dateArray: string[] = [];
+
+    for (
+      let d = new Date(startDate);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      dateArray.push(`${year}-${month}-${day}`);
+    }
+
+    return dateArray.filter((date) => unavailableDates.includes(date)).length;
   };
 
   if (
@@ -1055,11 +1127,12 @@ export default function ReservationPage() {
                   <p className='text-sm text-gray-500 ml-7'>
                     {getAvailableDaysCount()} available day
                     {getAvailableDaysCount() !== 1 ? 's' : ''}
-                    {unavailableDates.length > 0 && (
+                    {getUnavailableDaysInRange() > 0 && (
                       <span className='text-red-600'>
                         {' '}
-                        ({unavailableDates.length} day
-                        {unavailableDates.length !== 1 ? 's' : ''} unavailable)
+                        ({getUnavailableDaysInRange()} day
+                        {getUnavailableDaysInRange() !== 1 ? 's' : ''}{' '}
+                        unavailable)
                       </span>
                     )}
                   </p>
@@ -1184,6 +1257,7 @@ export default function ReservationPage() {
                   parkingLot.mapImage ||
                   `/placeholder.svg?height=400&width=500&text=${
                     encodeURIComponent(parkingLot.establishment_name) ||
+                    '/placeholder.svg' ||
                     '/placeholder.svg'
                   }+Map`
                 }
@@ -1346,7 +1420,11 @@ export default function ReservationPage() {
                               </span>
                             </div>
                             <span className='text-xs text-gray-500'>
-                              {new Date(fb.created_at).toLocaleDateString()}
+                              {formatInTimeZone(
+                                new Date(fb.created_at),
+                                TIMEZONE,
+                                'MMM d, yyyy'
+                              )}
                             </span>
                           </div>
                           <p className='text-gray-700 text-sm leading-relaxed'>
@@ -1429,51 +1507,27 @@ export default function ReservationPage() {
                 </Select>
               </div>
 
-              {/* Date Range Selection */}
+              {/* Date Range Selection with Custom Date Pickers */}
               <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-                <div>
-                  <Label
-                    htmlFor='dateFrom'
-                    className='text-base font-semibold mb-2 block text-gray-700'
-                  >
-                    Start Date
-                  </Label>
-                  <Input
-                    id='dateFrom'
-                    type='date'
-                    value={formData.dateFrom}
-                    min={getCurrentDateTime().currentDate}
-                    onChange={(e) => handleDateFromChange(e.target.value)}
-                    className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
-                    required
-                  />
-                  {unavailableDates.length > 0 && (
-                    <p className='text-xs text-red-600 mt-1'>
-                      Unavailable dates:{' '}
-                      {unavailableDates
-                        .map((date) => new Date(date).toLocaleDateString())
-                        .join(', ')}
-                    </p>
-                  )}
-                </div>
+                <CustomDatePicker
+                  value={formData.dateFrom}
+                  onChange={handleDateFromChange}
+                  label='Start Date'
+                  unavailableDates={unavailableDates}
+                  minDate={getCurrentDateTime().currentDate}
+                  required
+                />
 
-                <div>
-                  <Label
-                    htmlFor='dateTo'
-                    className='text-base font-semibold mb-2 block text-gray-700'
-                  >
-                    End Date
-                  </Label>
-                  <Input
-                    id='dateTo'
-                    type='date'
-                    value={formData.dateTo}
-                    min={formData.dateFrom || getCurrentDateTime().currentDate}
-                    onChange={(e) => handleDateToChange(e.target.value)}
-                    className='w-full p-3 text-base bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'
-                    required
-                  />
-                </div>
+                <CustomDatePicker
+                  value={formData.dateTo}
+                  onChange={handleDateToChange}
+                  label='End Date'
+                  unavailableDates={unavailableDates}
+                  minDate={
+                    formData.dateFrom || getCurrentDateTime().currentDate
+                  }
+                  required
+                />
               </div>
 
               {/* Date Range Info */}
