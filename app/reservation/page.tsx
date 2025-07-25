@@ -84,6 +84,12 @@ export default function ReservationPage() {
   const isEligibleForDiscount = user?.eligible_for_discount === true;
   const discountPercentage = 20; // 20% discount for PWD/Senior Citizens
 
+  // Check if the selected date range is multi-day
+  const isMultiDay = () => {
+    if (!formData.dateFrom || !formData.dateTo) return false;
+    return formData.dateFrom !== formData.dateTo;
+  };
+
   // Get current date and time in Singapore timezone
   const getCurrentDateTime = () => {
     const now = new Date();
@@ -101,6 +107,23 @@ export default function ReservationPage() {
       router.replace('/login');
     }
   }, [user, loading, router]);
+
+  // Auto-set reservation type based on date selection
+  useEffect(() => {
+    if (formData.dateFrom && formData.dateTo) {
+      const multiDay = isMultiDay();
+      if (multiDay && formData.reservationType === 'hourly') {
+        // Auto-switch to whole_day for multi-day reservations
+        setFormData((prev) => ({ ...prev, reservationType: 'whole_day' }));
+        toast({
+          title: 'Reservation Type Changed',
+          description:
+            'Multi-day reservations automatically use whole day pricing.',
+          variant: 'default',
+        });
+      }
+    }
+  }, [formData.dateFrom, formData.dateTo, formData.reservationType, toast]);
 
   // Fetch parking space and reserved slots
   useEffect(() => {
@@ -532,6 +555,16 @@ export default function ReservationPage() {
   };
 
   const handleReservationTypeChange = (value: string) => {
+    // Prevent changing to hourly for multi-day reservations
+    if (value === 'hourly' && isMultiDay()) {
+      toast({
+        title: 'Invalid Selection',
+        description: 'Multi-day reservations must use whole day pricing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const updatedForm = { ...formData, reservationType: value };
     setFormData(updatedForm);
 
@@ -686,6 +719,7 @@ export default function ReservationPage() {
               : null,
             unavailable_dates: unavailableDates, // Send unavailable dates to backend
             timezone: TIMEZONE, // Send timezone info to backend
+            is_multi_day: isMultiDay(), // Send multi-day flag to backend
           }),
         }
       );
@@ -1258,6 +1292,7 @@ export default function ReservationPage() {
                   `/placeholder.svg?height=400&width=500&text=${
                     encodeURIComponent(parkingLot.establishment_name) ||
                     '/placeholder.svg' ||
+                    '/placeholder.svg' ||
                     '/placeholder.svg'
                   }+Map`
                 }
@@ -1285,12 +1320,6 @@ export default function ReservationPage() {
                   Total Capacity:{' '}
                   <span className='font-bold'>
                     {parkingLot.total_spaces} spaces
-                  </span>
-                </p>
-                <p className='text-sm sm:text-base text-gray-700'>
-                  Available Spaces:{' '}
-                  <span className='font-bold'>
-                    {parkingLot.available_spaces} spaces
                   </span>
                 </p>
                 <p className='text-xs text-gray-500'>
@@ -1583,22 +1612,31 @@ export default function ReservationPage() {
                 <Select
                   value={formData.reservationType}
                   onValueChange={handleReservationTypeChange}
+                  disabled={isMultiDay()} // Disable dropdown for multi-day reservations
                 >
                   <SelectTrigger className='w-full p-3 bg-gray-50 border-2 border-gray-200 rounded-xl hover:border-blue-300'>
                     <SelectValue placeholder='Select reservation type' />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='hourly'>
-                      Hourly - ₱{parkingLot?.hourlyRate?.toFixed(2)}/hr
-                    </SelectItem>
+                    {!isMultiDay() && (
+                      <SelectItem value='hourly'>
+                        Hourly - ₱{parkingLot?.hourlyRate?.toFixed(2)}/hr
+                      </SelectItem>
+                    )}
                     <SelectItem value='whole_day'>
                       Whole Day - ₱{parkingLot?.whole_day_rate?.toFixed(2)}/day
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                {isMultiDay() && (
+                  <p className='text-sm text-blue-600 mt-2'>
+                    ℹ️ Multi-day reservations automatically use whole day
+                    pricing
+                  </p>
+                )}
               </div>
 
-              {formData.reservationType === 'hourly' && (
+              {formData.reservationType === 'hourly' && !isMultiDay() && (
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
                   <div>
                     <Label
