@@ -126,7 +126,6 @@ export default function EditUserPage() {
         }
 
         const u = await res.json();
-        console.log(u);
         setFormData({
           firstName: u.first_name || '',
           middleName: u.middle_name || '',

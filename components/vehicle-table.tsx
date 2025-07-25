@@ -36,7 +36,6 @@ export default function VehicleTable() {
 
   useEffect(() => {
     const fetchVehicles = async () => {
-      console.log(`${process.env.NEXT_PUBLIC_API_URL}/vehicles`);
       try {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/vehicles`, {
           method: 'GET',

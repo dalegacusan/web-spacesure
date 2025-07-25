@@ -27,9 +27,6 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    // TODO: Integrate with NestJS API for password reset
-    console.log('Password reset requested for:', email);
-
     toast({
       title: 'Reset Link Sent',
       description:
