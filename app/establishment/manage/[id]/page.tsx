@@ -28,7 +28,9 @@ import {
   Calendar,
   Car,
   CheckCircle,
+  Clock,
   DollarSign,
+  Filter,
   Loader2,
   MapPin,
   MessageSquare,
@@ -36,6 +38,7 @@ import {
   Settings,
   Star,
   Users,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -128,6 +131,14 @@ interface Feedback {
   };
 }
 
+interface FilterState {
+  status: string;
+  paymentStatus: string;
+  reservationType: string;
+  dateRange: string;
+  amountRange: string;
+}
+
 export default function ManageParkingSpace({
   params,
 }: {
@@ -155,6 +166,14 @@ export default function ManageParkingSpace({
     string | null
   >(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    status: 'all',
+    paymentStatus: 'all',
+    reservationType: 'all',
+    dateRange: 'all',
+    amountRange: 'all',
+  });
 
   useEffect(() => {
     if (!loading && (!user || user.role !== UserRole.ADMIN)) {
@@ -220,43 +239,196 @@ export default function ManageParkingSpace({
     fetchFeedbacks();
   }, [params.id, token]);
 
-  // Filter reservations based on search query
-  const filteredReservations = useMemo(() => {
-    if (!searchQuery.trim()) return reservations;
+  // Helper function to check if a date is today
+  const isToday = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    return (
+      date.getFullYear() === today.getFullYear() &&
+      date.getMonth() === today.getMonth() &&
+      date.getDate() === today.getDate()
+    );
+  };
 
-    const query = searchQuery.toLowerCase();
-    return reservations.filter((reservation) => {
-      // Search by reservation ID
-      if (reservation._id.toLowerCase().includes(query)) return true;
-      // Search by vehicle plate number
-      if (reservation.vehicle?.plate_number?.toLowerCase().includes(query))
-        return true;
-      // Search by vehicle type
-      if (reservation.vehicle?.vehicle_type?.toLowerCase().includes(query))
-        return true;
-      // Search by vehicle model
-      if (reservation.vehicle?.year_make_model?.toLowerCase().includes(query))
-        return true;
-      // Search by reservation status
-      if (reservation.status.toLowerCase().includes(query)) return true;
-      // Search by payment method
-      if (
-        reservation.payments?.some((payment) =>
-          payment.payment_method.toLowerCase().includes(query)
+  // Helper function to check if a date is upcoming (today or future)
+  const isUpcoming = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date >= today;
+  };
+
+  // Get today's reservations
+  const todaysReservations = useMemo(() => {
+    return reservations.filter((r) => isToday(r.start_time));
+  }, [reservations]);
+
+  // Get upcoming reservations (today and future)
+  const upcomingReservations = useMemo(() => {
+    return reservations.filter((r) => isUpcoming(r.start_time));
+  }, [reservations]);
+
+  // Filter reservations based on search query and filters
+  const filteredReservations = useMemo(() => {
+    let filtered = reservations;
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((reservation) => {
+        // Search by reservation ID
+        if (reservation._id.toLowerCase().includes(query)) return true;
+        // Search by vehicle plate number
+        if (reservation.vehicle?.plate_number?.toLowerCase().includes(query))
+          return true;
+        // Search by vehicle type
+        if (reservation.vehicle?.vehicle_type?.toLowerCase().includes(query))
+          return true;
+        // Search by vehicle model
+        if (reservation.vehicle?.year_make_model?.toLowerCase().includes(query))
+          return true;
+        // Search by reservation status
+        if (reservation.status.toLowerCase().includes(query)) return true;
+        // Search by payment method
+        if (
+          reservation.payments?.some((payment) =>
+            payment.payment_method.toLowerCase().includes(query)
+          )
         )
-      )
-        return true;
-      // Search by customer name
-      if (
-        reservation.user &&
-        `${reservation.user.first_name} ${reservation.user.last_name}`
-          .toLowerCase()
-          .includes(query)
-      )
-        return true;
-      return false;
+          return true;
+        // Search by customer name
+        if (
+          reservation.user &&
+          `${reservation.user.first_name} ${reservation.user.last_name}`
+            .toLowerCase()
+            .includes(query)
+        )
+          return true;
+        return false;
+      });
+    }
+
+    // Apply filters - only filter if a specific value is selected (not 'all' or empty string)
+    if (filters.status && filters.status !== '' && filters.status !== 'all') {
+      filtered = filtered.filter((r) => r.status === filters.status);
+    }
+
+    if (
+      filters.paymentStatus &&
+      filters.paymentStatus !== '' &&
+      filters.paymentStatus !== 'all'
+    ) {
+      filtered = filtered.filter((r) => {
+        const paymentStatus = r.payments?.[0]?.payment_status || 'PENDING';
+        return paymentStatus === filters.paymentStatus;
+      });
+    }
+
+    if (
+      filters.reservationType &&
+      filters.reservationType !== '' &&
+      filters.reservationType !== 'all'
+    ) {
+      filtered = filtered.filter(
+        (r) => r.reservation_type === filters.reservationType
+      );
+    }
+
+    if (
+      filters.dateRange &&
+      filters.dateRange !== '' &&
+      filters.dateRange !== 'all'
+    ) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const lastWeek = new Date(today);
+      lastWeek.setDate(lastWeek.getDate() - 7);
+      const lastMonth = new Date(today);
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      filtered = filtered.filter((r) => {
+        const reservationStartDate = new Date(r.start_time);
+        const reservationCreatedDate = new Date(r.created_at);
+
+        switch (filters.dateRange) {
+          case 'today':
+            return isToday(r.start_time);
+          case 'upcoming':
+            return isUpcoming(r.start_time);
+          case 'tomorrow':
+            const tomorrowEnd = new Date(tomorrow);
+            tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+            return (
+              reservationStartDate >= tomorrow &&
+              reservationStartDate < tomorrowEnd
+            );
+          case 'this_week':
+            const weekEnd = new Date(today);
+            weekEnd.setDate(weekEnd.getDate() + 7);
+            return (
+              reservationStartDate >= today && reservationStartDate < weekEnd
+            );
+          case 'created_today':
+            return isToday(r.created_at);
+          case 'created_yesterday':
+            return (
+              reservationCreatedDate >= yesterday &&
+              reservationCreatedDate < today
+            );
+          case 'created_last_week':
+            return reservationCreatedDate >= lastWeek;
+          case 'created_last_month':
+            return reservationCreatedDate >= lastMonth;
+          default:
+            return true;
+        }
+      });
+    }
+
+    if (
+      filters.amountRange &&
+      filters.amountRange !== '' &&
+      filters.amountRange !== 'all'
+    ) {
+      filtered = filtered.filter((r) => {
+        const amount = r.total_price;
+        switch (filters.amountRange) {
+          case 'under_100':
+            return amount < 100;
+          case '100_500':
+            return amount >= 100 && amount <= 500;
+          case '500_1000':
+            return amount >= 500 && amount <= 1000;
+          case 'over_1000':
+            return amount > 1000;
+          default:
+            return true;
+        }
+      });
+    }
+
+    return filtered;
+  }, [reservations, searchQuery, filters]);
+
+  const clearFilters = () => {
+    setFilters({
+      status: 'all',
+      paymentStatus: 'all',
+      reservationType: 'all',
+      dateRange: 'all',
+      amountRange: 'all',
     });
-  }, [reservations, searchQuery]);
+    setSearchQuery('');
+  };
+
+  const activeFiltersCount =
+    Object.values(filters).filter(
+      (value) => value && value !== '' && value !== 'all'
+    ).length + (searchQuery ? 1 : 0);
 
   const handleUpdateSpace = async () => {
     if (!parkingSpace || !token) return;
@@ -289,7 +461,7 @@ export default function ManageParkingSpace({
       toast({
         title: 'Success',
         description: 'Parking space updated successfully.',
-        variant: 'success',
+        variant: 'default',
       });
     } catch (err) {
       toast({
@@ -387,7 +559,7 @@ export default function ManageParkingSpace({
       toast({
         title: 'Reservation Completed',
         description: 'Reservation has been marked as completed.',
-        variant: 'success',
+        variant: 'default',
       });
 
       // Update reservation status in state
@@ -826,6 +998,73 @@ export default function ManageParkingSpace({
               </Card>
             </div>
 
+            {/* Today's Reservations Quick View */}
+            {todaysReservations.length > 0 && (
+              <Card className='bg-white'>
+                <CardHeader className='flex items-center justify-between'>
+                  <CardTitle className='flex items-center space-x-2'>
+                    <Clock className='h-5 w-5 text-orange-600' />
+                    <span>
+                      Today's Reservations ({todaysReservations.length})
+                    </span>
+                  </CardTitle>
+                  <Button
+                    variant='ghost'
+                    size='sm'
+                    className='text-blue-600 hover:text-blue-800'
+                    onClick={() => {
+                      setFilters({ ...filters, dateRange: 'today' });
+                      setActiveTab('reservations');
+                    }}
+                  >
+                    View All →
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className='space-y-3'>
+                    {todaysReservations.slice(0, 3).map((reservation) => (
+                      <div
+                        key={reservation._id}
+                        className='flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg'
+                      >
+                        <div className='flex items-center space-x-3'>
+                          <div className='w-2 h-2 bg-orange-500 rounded-full'></div>
+                          <div>
+                            <p className='font-medium text-sm'>
+                              {reservation.user.first_name}{' '}
+                              {reservation.user.last_name}
+                            </p>
+                            <p className='text-xs text-gray-600'>
+                              {reservation.vehicle?.plate_number} •{' '}
+                              {reservation.reservation_type === 'whole_day'
+                                ? 'Whole Day'
+                                : `${formatUtcTo12HourTime(
+                                    reservation.start_time
+                                  )} - ${formatUtcTo12HourTime(
+                                    reservation.end_time
+                                  )}`}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge
+                          className={getReservationStatusBadge(
+                            reservation.status
+                          )}
+                        >
+                          {reservation.status}
+                        </Badge>
+                      </div>
+                    ))}
+                    {todaysReservations.length > 3 && (
+                      <p className='text-sm text-gray-500 text-center'>
+                        +{todaysReservations.length - 3} more reservations today
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Recent Activity */}
             <Card className='bg-white'>
               <CardHeader className='flex items-center justify-between'>
@@ -867,19 +1106,16 @@ export default function ManageParkingSpace({
                           {(() => {
                             const start = new Date(reservation.start_time);
                             const end = new Date(reservation.end_time);
-
                             const startDateStr = start
                               .toISOString()
                               .split('T')[0];
                             const endDateStr = end.toISOString().split('T')[0];
-
                             const dateLabel =
                               startDateStr === endDateStr
                                 ? formatDateToLong(startDateStr)
                                 : `${formatDateToLong(
                                     startDateStr
                                   )} to ${formatDateToLong(endDateStr)}`;
-
                             const timeLabel =
                               reservation.reservation_type === 'whole_day'
                                 ? '12:00 AM - 11:59 PM'
@@ -888,7 +1124,6 @@ export default function ManageParkingSpace({
                                   )} - ${formatUtcTo12HourTime(
                                     reservation.end_time
                                   )}`;
-
                             return `${dateLabel} · ${timeLabel}`;
                           })()}
                         </p>
@@ -1149,21 +1384,277 @@ export default function ManageParkingSpace({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {/* Search Bar */}
-                <div className='mb-6'>
-                  <div className='relative'>
-                    <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
-                    <Input
-                      placeholder='Search by reservation ID, customer, vehicle, or establishment...'
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className='pl-10'
-                    />
+                {/* Quick Filter Buttons */}
+                <div className='mb-4 flex flex-wrap gap-2'>
+                  <Button
+                    variant={
+                      filters.dateRange === 'today' ? 'default' : 'outline'
+                    }
+                    size='sm'
+                    onClick={() => {
+                      if (filters.dateRange === 'today') {
+                        setFilters({ ...filters, dateRange: 'all' });
+                      } else {
+                        setFilters({ ...filters, dateRange: 'today' });
+                      }
+                    }}
+                    className='flex items-center space-x-1'
+                  >
+                    <Clock className='h-4 w-4' />
+                    <span>Today ({todaysReservations.length})</span>
+                  </Button>
+                  <Button
+                    variant={
+                      filters.dateRange === 'upcoming' ? 'default' : 'outline'
+                    }
+                    size='sm'
+                    onClick={() => {
+                      if (filters.dateRange === 'upcoming') {
+                        setFilters({ ...filters, dateRange: 'all' });
+                      } else {
+                        setFilters({ ...filters, dateRange: 'upcoming' });
+                      }
+                    }}
+                    className='flex items-center space-x-1'
+                  >
+                    <Calendar className='h-4 w-4' />
+                    <span>Upcoming ({upcomingReservations.length})</span>
+                  </Button>
+                  <Button
+                    variant={filters.status === 'PAID' ? 'default' : 'outline'}
+                    size='sm'
+                    onClick={() => {
+                      if (filters.status === 'PAID') {
+                        setFilters({ ...filters, status: 'all' });
+                      } else {
+                        setFilters({ ...filters, status: 'PAID' });
+                      }
+                    }}
+                  >
+                    Paid
+                  </Button>
+                  <Button
+                    variant={
+                      filters.status === 'COMPLETED' ? 'default' : 'outline'
+                    }
+                    size='sm'
+                    onClick={() => {
+                      if (filters.status === 'COMPLETED') {
+                        setFilters({ ...filters, status: 'all' });
+                      } else {
+                        setFilters({ ...filters, status: 'COMPLETED' });
+                      }
+                    }}
+                  >
+                    Completed
+                  </Button>
+                  <Button
+                    variant={
+                      filters.paymentStatus === 'PENDING'
+                        ? 'default'
+                        : 'outline'
+                    }
+                    size='sm'
+                    onClick={() => {
+                      if (filters.paymentStatus === 'PENDING') {
+                        setFilters({ ...filters, paymentStatus: 'all' });
+                      } else {
+                        setFilters({ ...filters, paymentStatus: 'PENDING' });
+                      }
+                    }}
+                  >
+                    Pending Payment
+                  </Button>
+                  <Button
+                    variant={
+                      filters.status === 'CANCELLED' ? 'default' : 'outline'
+                    }
+                    size='sm'
+                    onClick={() => {
+                      if (filters.status === 'CANCELLED') {
+                        setFilters({ ...filters, status: 'all' });
+                      } else {
+                        setFilters({ ...filters, status: 'CANCELLED' });
+                      }
+                    }}
+                  >
+                    Cancelled
+                  </Button>
+                </div>
+
+                {/* Search and Filter Bar */}
+                <div className='mb-6 space-y-4'>
+                  <div className='flex flex-col sm:flex-row gap-4'>
+                    {/* Search Bar */}
+                    <div className='relative flex-1'>
+                      <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                      <Input
+                        placeholder='Search by reservation ID, customer, vehicle, or establishment...'
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className='pl-10'
+                      />
+                    </div>
+
+                    {/* Filter Toggle Button */}
+                    <Button
+                      variant='outline'
+                      onClick={() => setShowFilters(!showFilters)}
+                      className='flex items-center space-x-2'
+                    >
+                      <Filter className='h-4 w-4' />
+                      <span>Advanced Filters</span>
+                      {activeFiltersCount > 0 && (
+                        <Badge variant='secondary' className='ml-1'>
+                          {activeFiltersCount}
+                        </Badge>
+                      )}
+                    </Button>
                   </div>
-                  {searchQuery && (
-                    <div className='mt-2 text-sm text-gray-600'>
+
+                  {/* Filter Panel */}
+                  {showFilters && (
+                    <div className='bg-gray-50 border border-gray-200 rounded-lg p-4'>
+                      <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+                        {/* Status Filter */}
+                        <div>
+                          <Label className='text-sm font-medium mb-2 block'>
+                            Status
+                          </Label>
+                          <Select
+                            value={filters.status}
+                            onValueChange={(value) =>
+                              setFilters({ ...filters, status: value })
+                            }
+                          >
+                            <SelectTrigger className='h-9'>
+                              <SelectValue placeholder='All Statuses' />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value='all'>All Statuses</SelectItem>
+                              <SelectItem value='CREATED'>Created</SelectItem>
+                              <SelectItem value='PAID'>Paid</SelectItem>
+                              <SelectItem value='COMPLETED'>
+                                Completed
+                              </SelectItem>
+                              <SelectItem value='CANCELLED'>
+                                Cancelled
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Payment Status Filter */}
+                        <div>
+                          <Label className='text-sm font-medium mb-2 block'>
+                            Payment
+                          </Label>
+                          <Select
+                            value={filters.paymentStatus}
+                            onValueChange={(value) =>
+                              setFilters({ ...filters, paymentStatus: value })
+                            }
+                          >
+                            <SelectTrigger className='h-9'>
+                              <SelectValue placeholder='All Payments' />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value='all'>All Payments</SelectItem>
+                              <SelectItem value='COMPLETED'>
+                                Completed
+                              </SelectItem>
+                              <SelectItem value='PENDING'>Pending</SelectItem>
+                              <SelectItem value='FAILED'>Failed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Reservation Type Filter */}
+                        <div>
+                          <Label className='text-sm font-medium mb-2 block'>
+                            Type
+                          </Label>
+                          <Select
+                            value={filters.reservationType}
+                            onValueChange={(value) =>
+                              setFilters({ ...filters, reservationType: value })
+                            }
+                          >
+                            <SelectTrigger className='h-9'>
+                              <SelectValue placeholder='All Types' />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value='all'>All Types</SelectItem>
+                              <SelectItem value='hourly'>Hourly</SelectItem>
+                              <SelectItem value='whole_day'>
+                                Whole Day
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Date Range Filter */}
+                        <div>
+                          <Label className='text-sm font-medium mb-2 block'>
+                            Reservation Date
+                          </Label>
+                          <Select
+                            value={filters.dateRange}
+                            onValueChange={(value) =>
+                              setFilters({ ...filters, dateRange: value })
+                            }
+                          >
+                            <SelectTrigger className='h-9'>
+                              <SelectValue placeholder='All Dates' />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value='all'>All Dates</SelectItem>
+                              <SelectItem value='today'>Today</SelectItem>
+                              <SelectItem value='upcoming'>Upcoming</SelectItem>
+                              <SelectItem value='tomorrow'>Tomorrow</SelectItem>
+                              <SelectItem value='this_week'>
+                                This Week
+                              </SelectItem>
+                              <SelectItem value='created_today'>
+                                Created Today
+                              </SelectItem>
+                              <SelectItem value='created_yesterday'>
+                                Created Yesterday
+                              </SelectItem>
+                              <SelectItem value='created_last_week'>
+                                Created Last Week
+                              </SelectItem>
+                              <SelectItem value='created_last_month'>
+                                Created Last Month
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Clear Filters Button */}
+                      {activeFiltersCount > 0 && (
+                        <div className='mt-4 pt-4 border-t border-gray-200'>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            onClick={clearFilters}
+                            className='text-gray-600 hover:text-gray-800'
+                          >
+                            <X className='h-4 w-4 mr-2' />
+                            Clear All Filters
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Results Summary */}
+                  {(searchQuery || activeFiltersCount > 0) && (
+                    <div className='text-sm text-gray-600'>
                       Showing {filteredReservations.length} of{' '}
                       {reservations.length} reservations
+                      {searchQuery && <span> matching "{searchQuery}"</span>}
                     </div>
                   )}
                 </div>
@@ -1187,6 +1678,9 @@ export default function ManageParkingSpace({
                             Date & Time
                           </th>
                           <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                            Type
+                          </th>
+                          <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                             Amount
                           </th>
                           <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
@@ -1204,28 +1698,24 @@ export default function ManageParkingSpace({
                         {filteredReservations.map((r) => {
                           const start = new Date(r.start_time);
                           const end = new Date(r.end_time);
-
                           const startDateStr = start
                             .toISOString()
                             .split('T')[0];
                           const endDateStr = end.toISOString().split('T')[0];
-
                           const timeRange =
                             r.reservation_type === 'whole_day'
                               ? '12:00 AM - 11:59 PM'
                               : `${formatUtcTo12HourTime(
                                   r.start_time
                                 )} - ${formatUtcTo12HourTime(r.end_time)}`;
-
                           const displayDate =
                             startDateStr === endDateStr
                               ? formatDateToLong(startDateStr)
                               : `${formatDateToLong(
                                   startDateStr
                                 )} to ${formatDateToLong(endDateStr)}`;
-
                           const paymentStatus =
-                            r.payments?.[0]?.payment_status || 'pending';
+                            r.payments?.[0]?.payment_status || 'PENDING';
 
                           return (
                             <tr key={r._id} className='hover:bg-gray-50'>
@@ -1267,6 +1757,20 @@ export default function ManageParkingSpace({
                                   </div>
                                 </div>
                               </td>
+                              <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                                <Badge
+                                  variant='outline'
+                                  className={
+                                    r.reservation_type === 'whole_day'
+                                      ? 'border-blue-200 text-blue-700 bg-blue-50'
+                                      : 'border-green-200 text-green-700 bg-green-50'
+                                  }
+                                >
+                                  {r.reservation_type === 'whole_day'
+                                    ? 'Whole Day'
+                                    : 'Hourly'}
+                                </Badge>
+                              </td>
                               <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-[#3B4A9C]'>
                                 ₱{r.total_price.toFixed(2)}
                               </td>
@@ -1288,11 +1792,11 @@ export default function ManageParkingSpace({
                               <td className='px-6 py-4 whitespace-nowrap'>
                                 <Badge
                                   className={
-                                    paymentStatus === 'paid'
+                                    paymentStatus === 'COMPLETED'
                                       ? 'bg-blue-100 text-blue-800'
-                                      : paymentStatus === 'pending'
+                                      : paymentStatus === 'PENDING'
                                       ? 'bg-yellow-100 text-yellow-800'
-                                      : paymentStatus === 'failed'
+                                      : paymentStatus === 'FAILED'
                                       ? 'bg-red-100 text-red-800'
                                       : 'bg-gray-100 text-gray-800'
                                   }
@@ -1316,26 +1820,22 @@ export default function ManageParkingSpace({
                   {filteredReservations.map((r) => {
                     const start = new Date(r.start_time);
                     const end = new Date(r.end_time);
-
                     const startDateStr = start.toISOString().split('T')[0];
                     const endDateStr = end.toISOString().split('T')[0];
-
                     const timeRange =
                       r.reservation_type === 'whole_day'
                         ? '12:00 AM - 11:59 PM'
                         : `${formatUtcTo12HourTime(
                             r.start_time
                           )} - ${formatUtcTo12HourTime(r.end_time)}`;
-
                     const displayDate =
                       startDateStr === endDateStr
                         ? formatDateToLong(startDateStr)
                         : `${formatDateToLong(
                             startDateStr
                           )} to ${formatDateToLong(endDateStr)}`;
-
                     const paymentStatus =
-                      r.payments?.[0]?.payment_status || 'pending';
+                      r.payments?.[0]?.payment_status || 'PENDING';
 
                     return (
                       <div
@@ -1367,16 +1867,28 @@ export default function ManageParkingSpace({
                             </Badge>
                             <Badge
                               className={
-                                paymentStatus === 'paid'
+                                paymentStatus === 'COMPLETED'
                                   ? 'bg-blue-100 text-blue-800'
-                                  : paymentStatus === 'pending'
+                                  : paymentStatus === 'PENDING'
                                   ? 'bg-yellow-100 text-yellow-800'
-                                  : paymentStatus === 'failed'
+                                  : paymentStatus === 'FAILED'
                                   ? 'bg-red-100 text-red-800'
                                   : 'bg-gray-100 text-gray-800'
                               }
                             >
                               {paymentStatus}
+                            </Badge>
+                            <Badge
+                              variant='outline'
+                              className={
+                                r.reservation_type === 'whole_day'
+                                  ? 'border-blue-200 text-blue-700 bg-blue-50'
+                                  : 'border-green-200 text-green-700 bg-green-50'
+                              }
+                            >
+                              {r.reservation_type === 'whole_day'
+                                ? 'Whole Day'
+                                : 'Hourly'}
                             </Badge>
                           </div>
                         </div>
@@ -1437,16 +1949,19 @@ export default function ManageParkingSpace({
                   })}
                 </div>
 
-                {filteredReservations.length === 0 && searchQuery && (
-                  <div className='text-center py-8 text-gray-500'>
-                    No reservations found matching "{searchQuery}".
-                  </div>
-                )}
-                {reservations.length === 0 && !searchQuery && (
-                  <div className='text-center py-8 text-gray-500'>
-                    No reservations found for this parking space.
-                  </div>
-                )}
+                {filteredReservations.length === 0 &&
+                  (searchQuery || activeFiltersCount > 0) && (
+                    <div className='text-center py-8 text-gray-500'>
+                      No reservations found matching your search criteria.
+                    </div>
+                  )}
+                {reservations.length === 0 &&
+                  !searchQuery &&
+                  activeFiltersCount === 0 && (
+                    <div className='text-center py-8 text-gray-500'>
+                      No reservations found for this parking space.
+                    </div>
+                  )}
               </CardContent>
             </Card>
           </TabsContent>
