@@ -8,13 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { AvailabilityStatus } from '@/lib/enums/availability-status.enum';
 import { UserRole } from '@/lib/enums/roles.enum';
@@ -58,7 +51,7 @@ export default function AddEstablishmentPage() {
             available_spaces: formData.availableSpaces,
             hourlyRate: formData.hourlyRate,
             whole_day_rate: formData.wholeDayRate,
-            availability_status: formData.availabilityStatus,
+            availability_status: AvailabilityStatus.CLOSED,
           }),
         }
       );
@@ -238,33 +231,6 @@ export default function AddEstablishmentPage() {
                       required
                     />
                   </div>
-                </div>
-
-                <div>
-                  <Label
-                    htmlFor='availabilityStatus'
-                    className='text-lg font-medium mb-3 block text-gray-700'
-                  >
-                    Availability Status
-                  </Label>
-                  <Select
-                    value={formData.availabilityStatus}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, availabilityStatus: value })
-                    }
-                  >
-                    <SelectTrigger className='w-full p-4 text-lg border-2 border-gray-200 rounded-lg hover:border-blue-300 transition-colors'>
-                      <SelectValue placeholder='Select availability status' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={AvailabilityStatus.OPEN}>
-                        {AvailabilityStatus.OPEN}
-                      </SelectItem>
-                      <SelectItem value={AvailabilityStatus.CLOSED}>
-                        {AvailabilityStatus.CLOSED}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 <div className='flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 pt-6'>

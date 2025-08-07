@@ -456,7 +456,11 @@ export default function ManageParkingSpace({
         }
       );
 
-      if (!res.ok) throw new Error('Failed to update parking space');
+      const data = await res.json(); // ✅ Parse response JSON
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to update parking space.');
+      }
 
       toast({
         title: 'Success',
@@ -466,7 +470,7 @@ export default function ManageParkingSpace({
     } catch (err) {
       toast({
         title: 'Error',
-        description: 'Failed to update parking space.',
+        description: err.message || 'Failed to update parking space.',
         variant: 'destructive',
       });
     } finally {

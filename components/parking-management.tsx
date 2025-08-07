@@ -1208,26 +1208,6 @@ export default function ParkingManagement() {
                               <Edit className='w-4 h-4' />
                             </Button>
                           </Link>
-                          <Button
-                            variant='outline'
-                            size='sm'
-                            onClick={() =>
-                              handleToggleStatus(establishment._id)
-                            }
-                            className={
-                              establishment.availability_status ===
-                              AvailabilityStatus.OPEN
-                                ? 'text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50'
-                                : 'text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50'
-                            }
-                          >
-                            {establishment.availability_status ===
-                            AvailabilityStatus.OPEN ? (
-                              <XCircle className='w-4 h-4' />
-                            ) : (
-                              <CheckCircle className='w-4 h-4' />
-                            )}
-                          </Button>
                         </div>
                       </td>
                     </tr>
