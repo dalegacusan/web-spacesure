@@ -109,8 +109,6 @@ export default function EditEstablishmentPage() {
             address: formData.address,
             total_spaces: formData.totalSpaces,
             available_spaces: formData.availableSpaces,
-            hourlyRate: formData.hourlyRate,
-            whole_day_rate: formData.wholeDayRate,
             availability_status: formData.availabilityStatus,
           }),
         }
@@ -273,54 +271,6 @@ export default function EditEstablishmentPage() {
                         setFormData({
                           ...formData,
                           availableSpaces: Number(e.target.value),
-                        })
-                      }
-                      className='w-full'
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                  <div>
-                    <Label
-                      htmlFor='hourlyRate'
-                      className='text-sm font-medium mb-2 block text-gray-700'
-                    >
-                      Hourly Rate (₱)
-                    </Label>
-                    <Input
-                      id='hourlyRate'
-                      type='number'
-                      step='0.01'
-                      value={formData.hourlyRate}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          hourlyRate: Number(e.target.value),
-                        })
-                      }
-                      className='w-full'
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label
-                      htmlFor='wholeDayRate'
-                      className='text-sm font-medium mb-2 block text-gray-700'
-                    >
-                      Whole Day Rate (₱)
-                    </Label>
-                    <Input
-                      id='wholeDayRate'
-                      type='number'
-                      step='0.01'
-                      value={formData.wholeDayRate}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          wholeDayRate: Number(e.target.value),
                         })
                       }
                       className='w-full'

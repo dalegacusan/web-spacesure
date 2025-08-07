@@ -33,13 +33,11 @@ const ReservationsPage = () => {
         );
 
         const res = await response.json();
-
         if (!response.ok) {
           throw new Error(
             res.message || res.error || 'Failed to fetch reservations'
           );
         }
-
         setReservations(res || []);
       } catch (error: any) {
         console.error('Error fetching reservations:', error);
@@ -61,16 +59,14 @@ const ReservationsPage = () => {
   return (
     <div className='min-h-screen bg-slate-200'>
       <Navbar />
-
-      <main
-        className=' mx-auto px-4 sm:px-6 py-6 sm:py-8'
-        style={{ width: '80%' }}
-      >
-        <div className='mb-4'>
-          <h1 className='text-2xl font-semibold'>Reservations</h1>
+      <main className='mx-auto px-6 py-8' style={{ maxWidth: '80%' }}>
+        <div className='mb-6'>
+          <h1 className='text-2xl font-semibold text-gray-800'>Reservations</h1>
+          <p className='text-gray-600 mt-1'>Manage all parking reservations</p>
         </div>
-
-        <ReservationsTable data={reservations} />
+        <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-6'>
+          <ReservationsTable data={reservations} />
+        </div>
       </main>
     </div>
   );

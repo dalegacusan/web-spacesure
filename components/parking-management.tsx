@@ -20,12 +20,16 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle,
+  ChevronDown,
+  ChevronUp,
   Edit,
   Eye,
+  Filter,
   Loader2,
   MapPin,
   Plus,
   Search,
+  X,
   XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -97,6 +101,14 @@ interface ParkingEstablishment {
   reservations?: Reservation[];
 }
 
+interface Filters {
+  status: string[];
+  city: string[];
+  hourlyRateRange: string[];
+  spacesRange: string[];
+  dateRange: string;
+}
+
 export default function ParkingManagement() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
@@ -107,6 +119,16 @@ export default function ParkingManagement() {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Filter states
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [filters, setFilters] = useState<Filters>({
+    status: [],
+    city: [],
+    hourlyRateRange: [],
+    spacesRange: [],
+    dateRange: '',
+  });
 
   // Modal state
   const [selectedEstablishment, setSelectedEstablishment] =
@@ -166,18 +188,137 @@ export default function ParkingManagement() {
     fetchEstablishments();
   }, [token, toast]);
 
-  // Filter establishments based on search term
-  const filteredEstablishments = useMemo(() => {
-    if (!searchTerm.trim()) return establishments;
+  // Get unique cities for filter options
+  const uniqueCities = useMemo(() => {
+    const cities = establishments.map((est) => est.city);
+    return Array.from(new Set(cities)).sort();
+  }, [establishments]);
 
-    const query = searchTerm.toLowerCase();
-    return establishments.filter(
-      (establishment) =>
-        establishment.establishment_name.toLowerCase().includes(query) ||
-        establishment.city.toLowerCase().includes(query) ||
-        establishment.address.toLowerCase().includes(query)
-    );
-  }, [establishments, searchTerm]);
+  // Quick filter counts
+  const quickFilterCounts = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+
+    return {
+      total: establishments.length,
+      open: establishments.filter(
+        (est) => est.availability_status === AvailabilityStatus.OPEN
+      ).length,
+      closed: establishments.filter(
+        (est) => est.availability_status === AvailabilityStatus.CLOSED
+      ).length,
+      highCapacity: establishments.filter((est) => est.total_spaces >= 100)
+        .length,
+      createdToday: establishments.filter(
+        (est) => est.created_at.split('T')[0] === today
+      ).length,
+    };
+  }, [establishments]);
+
+  // Apply filters
+  const filteredEstablishments = useMemo(() => {
+    let filtered = establishments;
+
+    // Search filter
+    if (searchTerm.trim()) {
+      const query = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (establishment) =>
+          establishment.establishment_name.toLowerCase().includes(query) ||
+          establishment.city.toLowerCase().includes(query) ||
+          establishment.address.toLowerCase().includes(query)
+      );
+    }
+
+    // Status filter
+    if (filters.status.length > 0) {
+      filtered = filtered.filter((est) =>
+        filters.status.includes(est.availability_status)
+      );
+    }
+
+    // City filter
+    if (filters.city.length > 0) {
+      filtered = filtered.filter((est) => filters.city.includes(est.city));
+    }
+
+    // Hourly rate range filter
+    if (filters.hourlyRateRange.length > 0) {
+      filtered = filtered.filter((est) => {
+        return filters.hourlyRateRange.some((range) => {
+          switch (range) {
+            case 'under-100':
+              return est.hourlyRate < 100;
+            case '100-150':
+              return est.hourlyRate >= 100 && est.hourlyRate <= 150;
+            case '150-200':
+              return est.hourlyRate >= 150 && est.hourlyRate <= 200;
+            case 'over-200':
+              return est.hourlyRate > 200;
+            default:
+              return false;
+          }
+        });
+      });
+    }
+
+    // Spaces range filter
+    if (filters.spacesRange.length > 0) {
+      filtered = filtered.filter((est) => {
+        return filters.spacesRange.some((range) => {
+          switch (range) {
+            case 'small':
+              return est.total_spaces <= 10;
+            case 'medium':
+              return est.total_spaces > 10 && est.total_spaces <= 50;
+            case 'large':
+              return est.total_spaces > 50 && est.total_spaces <= 100;
+            case 'extra-large':
+              return est.total_spaces > 100;
+            default:
+              return false;
+          }
+        });
+      });
+    }
+
+    // Date range filter
+    if (filters.dateRange) {
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      filtered = filtered.filter((est) => {
+        const createdDate = new Date(est.created_at);
+
+        switch (filters.dateRange) {
+          case 'today':
+            return createdDate.toDateString() === today.toDateString();
+          case 'yesterday':
+            return createdDate.toDateString() === yesterday.toDateString();
+          case 'this-week':
+            const weekStart = new Date(today);
+            weekStart.setDate(today.getDate() - today.getDay());
+            return createdDate >= weekStart;
+          case 'this-month':
+            return (
+              createdDate.getMonth() === today.getMonth() &&
+              createdDate.getFullYear() === today.getFullYear()
+            );
+          case 'last-month':
+            const lastMonth = new Date(today);
+            lastMonth.setMonth(today.getMonth() - 1);
+            return (
+              createdDate.getMonth() === lastMonth.getMonth() &&
+              createdDate.getFullYear() === lastMonth.getFullYear()
+            );
+          default:
+            return true;
+        }
+      });
+    }
+
+    return filtered;
+  }, [establishments, searchTerm, filters]);
 
   // Filter reservations based on search query
   const filteredReservations = useMemo(() => {
@@ -216,6 +357,65 @@ export default function ParkingManagement() {
       return false;
     });
   }, [reservations, reservationSearchQuery]);
+
+  const handleQuickFilter = (filterType: string, value: string) => {
+    setFilters((prev) => {
+      const newFilters = { ...prev };
+
+      // Clear all filters first for exclusive quick filters
+      if (filterType === 'dateRange') {
+        newFilters.dateRange = prev.dateRange === value ? '' : value;
+      } else if (filterType === 'status') {
+        newFilters.status = prev.status.includes(value) ? [] : [value];
+      } else if (filterType === 'spacesRange') {
+        newFilters.spacesRange = prev.spacesRange.includes(value)
+          ? []
+          : [value];
+      }
+
+      return newFilters;
+    });
+  };
+
+  const handleFilterChange = (filterType: keyof Filters, value: string) => {
+    setFilters((prev) => {
+      const newFilters = { ...prev };
+
+      if (filterType === 'dateRange') {
+        newFilters[filterType] = prev[filterType] === value ? '' : value;
+      } else {
+        const currentValues = prev[filterType] as string[];
+        if (currentValues.includes(value)) {
+          newFilters[filterType] = currentValues.filter((v) => v !== value);
+        } else {
+          newFilters[filterType] = [...currentValues, value];
+        }
+      }
+
+      return newFilters;
+    });
+  };
+
+  const clearAllFilters = () => {
+    setFilters({
+      status: [],
+      city: [],
+      hourlyRateRange: [],
+      spacesRange: [],
+      dateRange: '',
+    });
+    setSearchTerm('');
+  };
+
+  const getActiveFilterCount = () => {
+    return (
+      filters.status.length +
+      filters.city.length +
+      filters.hourlyRateRange.length +
+      filters.spacesRange.length +
+      (filters.dateRange ? 1 : 0)
+    );
+  };
 
   const handleViewReservations = async (
     establishment: ParkingEstablishment
@@ -286,7 +486,7 @@ export default function ParkingManagement() {
       toast({
         title: 'Status Updated',
         description: `Establishment status changed to ${newStatus.toLowerCase()}.`,
-        variant: 'success',
+        variant: 'default',
       });
     } catch (err) {
       toast({
@@ -356,7 +556,7 @@ export default function ParkingManagement() {
       toast({
         title: 'Reservation Completed',
         description: 'Reservation has been marked as completed.',
-        variant: 'success',
+        variant: 'default',
       });
 
       // Update reservation status in state
@@ -650,76 +850,407 @@ export default function ParkingManagement() {
         </Link>
       </div>
 
-      {/* Search */}
-      <div className='flex flex-col sm:flex-row gap-4'>
-        <Input
-          placeholder='Search by name, city, or address...'
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className='flex-1'
-        />
-      </div>
+      {/* Main Content Card */}
+      <Card className='bg-white shadow-sm'>
+        <CardHeader className='pb-4'>
+          <div className='flex flex-col space-y-4'>
+            {/* Quick Filter Buttons */}
+            <div className='flex flex-wrap gap-2'>
+              <Button
+                variant={
+                  filters.status.length === 0 && filters.dateRange === ''
+                    ? 'default'
+                    : 'outline'
+                }
+                size='sm'
+                onClick={() => clearAllFilters()}
+                className='h-8'
+              >
+                All ({quickFilterCounts.total})
+              </Button>
+              <Button
+                variant={
+                  filters.status.includes(AvailabilityStatus.OPEN)
+                    ? 'default'
+                    : 'outline'
+                }
+                size='sm'
+                onClick={() =>
+                  handleQuickFilter('status', AvailabilityStatus.OPEN)
+                }
+                className='h-8'
+              >
+                Open ({quickFilterCounts.open})
+              </Button>
+              <Button
+                variant={
+                  filters.status.includes(AvailabilityStatus.CLOSED)
+                    ? 'default'
+                    : 'outline'
+                }
+                size='sm'
+                onClick={() =>
+                  handleQuickFilter('status', AvailabilityStatus.CLOSED)
+                }
+                className='h-8'
+              >
+                Closed ({quickFilterCounts.closed})
+              </Button>
+            </div>
 
-      {/* Desktop Table */}
-      <div className='hidden lg:block'>
-        <div className='bg-white rounded-lg shadow overflow-hidden'>
-          <table className='min-w-full divide-y divide-gray-200'>
-            <thead className='bg-gray-50'>
-              <tr>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Establishment
-                </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Location
-                </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Spots
-                </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Rate
-                </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Status
-                </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className='bg-white divide-y divide-gray-200'>
-              {filteredEstablishments.map((establishment) => (
-                <tr key={establishment._id}>
-                  <td className='px-6 py-4 whitespace-nowrap'>
+            {/* Search and Advanced Filters */}
+            <div className='flex flex-col sm:flex-row gap-4'>
+              <div className='relative flex-1'>
+                <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                <Input
+                  placeholder='Search by name, city, or address...'
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className='pl-10'
+                />
+              </div>
+              <Button
+                variant='outline'
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className='flex items-center gap-2'
+              >
+                <Filter className='h-4 w-4' />
+                Filters
+                {getActiveFilterCount() > 0 && (
+                  <Badge variant='secondary' className='ml-1'>
+                    {getActiveFilterCount()}
+                  </Badge>
+                )}
+                {showAdvancedFilters ? (
+                  <ChevronUp className='h-4 w-4' />
+                ) : (
+                  <ChevronDown className='h-4 w-4' />
+                )}
+              </Button>
+            </div>
+
+            {/* Advanced Filters Panel */}
+            {showAdvancedFilters && (
+              <div className='border-t pt-4 space-y-4'>
+                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+                  {/* Status Filter */}
+                  <div>
+                    <label className='text-sm font-medium text-gray-700 mb-2 block'>
+                      Status
+                    </label>
+                    <div className='space-y-2'>
+                      {[AvailabilityStatus.OPEN, AvailabilityStatus.CLOSED].map(
+                        (status) => (
+                          <label
+                            key={status}
+                            className='flex items-center space-x-2'
+                          >
+                            <input
+                              type='checkbox'
+                              checked={filters.status.includes(status)}
+                              onChange={() =>
+                                handleFilterChange('status', status)
+                              }
+                              className='rounded border-gray-300'
+                            />
+                            <span className='text-sm'>{status}</span>
+                          </label>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {/* City Filter */}
+                  <div>
+                    <label className='text-sm font-medium text-gray-700 mb-2 block'>
+                      City
+                    </label>
+                    <div className='space-y-2 max-h-32 overflow-y-auto'>
+                      {uniqueCities.map((city) => (
+                        <label
+                          key={city}
+                          className='flex items-center space-x-2'
+                        >
+                          <input
+                            type='checkbox'
+                            checked={filters.city.includes(city)}
+                            onChange={() => handleFilterChange('city', city)}
+                            className='rounded border-gray-300'
+                          />
+                          <span className='text-sm'>{city}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Hourly Rate Range Filter */}
+                  <div>
+                    <label className='text-sm font-medium text-gray-700 mb-2 block'>
+                      Hourly Rate
+                    </label>
+                    <div className='space-y-2'>
+                      {[
+                        { value: 'under-100', label: 'Under ₱100' },
+                        { value: '100-150', label: '₱100 - ₱150' },
+                        { value: '150-200', label: '₱150 - ₱200' },
+                        { value: 'over-200', label: 'Over ₱200' },
+                      ].map((range) => (
+                        <label
+                          key={range.value}
+                          className='flex items-center space-x-2'
+                        >
+                          <input
+                            type='checkbox'
+                            checked={filters.hourlyRateRange.includes(
+                              range.value
+                            )}
+                            onChange={() =>
+                              handleFilterChange('hourlyRateRange', range.value)
+                            }
+                            className='rounded border-gray-300'
+                          />
+                          <span className='text-sm'>{range.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Spaces Range Filter */}
+                  <div>
+                    <label className='text-sm font-medium text-gray-700 mb-2 block'>
+                      Capacity
+                    </label>
+                    <div className='space-y-2'>
+                      {[
+                        { value: 'small', label: 'Small (≤10 spaces)' },
+                        { value: 'medium', label: 'Medium (11-50 spaces)' },
+                        { value: 'large', label: 'Large (51-100 spaces)' },
+                        {
+                          value: 'extra-large',
+                          label: 'Extra Large (>100 spaces)',
+                        },
+                      ].map((range) => (
+                        <label
+                          key={range.value}
+                          className='flex items-center space-x-2'
+                        >
+                          <input
+                            type='checkbox'
+                            checked={filters.spacesRange.includes(range.value)}
+                            onChange={() =>
+                              handleFilterChange('spacesRange', range.value)
+                            }
+                            className='rounded border-gray-300'
+                          />
+                          <span className='text-sm'>{range.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Date Range Filter */}
+                  <div>
+                    <label className='text-sm font-medium text-gray-700 mb-2 block'>
+                      Created Date
+                    </label>
+                    <div className='space-y-2'>
+                      {[
+                        { value: 'today', label: 'Today' },
+                        { value: 'yesterday', label: 'Yesterday' },
+                        { value: 'this-week', label: 'This Week' },
+                        { value: 'this-month', label: 'This Month' },
+                        { value: 'last-month', label: 'Last Month' },
+                      ].map((range) => (
+                        <label
+                          key={range.value}
+                          className='flex items-center space-x-2'
+                        >
+                          <input
+                            type='radio'
+                            name='dateRange'
+                            checked={filters.dateRange === range.value}
+                            onChange={() =>
+                              handleFilterChange('dateRange', range.value)
+                            }
+                            className='rounded border-gray-300'
+                          />
+                          <span className='text-sm'>{range.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Clear Filters Button */}
+                {getActiveFilterCount() > 0 && (
+                  <div className='flex justify-end'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={clearAllFilters}
+                      className='flex items-center gap-2'
+                    >
+                      <X className='h-4 w-4' />
+                      Clear All Filters
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Results Summary */}
+            {(searchTerm || getActiveFilterCount() > 0) && (
+              <div className='text-sm text-gray-600'>
+                Showing {filteredEstablishments.length} of{' '}
+                {establishments.length} establishments
+              </div>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          {/* Desktop Table */}
+          <div className='hidden lg:block'>
+            <div className='bg-white rounded-lg border overflow-hidden'>
+              <table className='min-w-full divide-y divide-gray-200'>
+                <thead className='bg-gray-50'>
+                  <tr>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                      Establishment
+                    </th>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                      Location
+                    </th>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                      Spots
+                    </th>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                      Rate
+                    </th>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                      Status
+                    </th>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className='bg-white divide-y divide-gray-200'>
+                  {filteredEstablishments.map((establishment) => (
+                    <tr key={establishment._id} className='hover:bg-gray-50'>
+                      <td className='px-6 py-4 whitespace-nowrap'>
+                        <div>
+                          <div className='text-sm font-medium text-gray-900'>
+                            {establishment.establishment_name}
+                          </div>
+                          <div className='text-sm text-gray-500'>
+                            {establishment.city}
+                          </div>
+                        </div>
+                      </td>
+                      <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                        <div className='flex items-center'>
+                          <MapPin className='w-4 h-4 mr-1' />
+                          <span
+                            className='truncate max-w-xs'
+                            title={establishment.address}
+                          >
+                            {establishment.address}
+                          </span>
+                        </div>
+                      </td>
+                      <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                        <div>
+                          <div>
+                            {establishment.available_spaces}/
+                            {establishment.total_spaces}
+                          </div>
+                          <div className='text-xs text-gray-400'>
+                            Available/Total
+                          </div>
+                        </div>
+                      </td>
+                      <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                        <div>
+                          <div className='font-medium'>
+                            ₱{establishment.hourlyRate}/hr
+                          </div>
+                          <div className='text-xs text-gray-400'>
+                            ₱{establishment.whole_day_rate}/day
+                          </div>
+                        </div>
+                      </td>
+                      <td className='px-6 py-4 whitespace-nowrap'>
+                        <Badge
+                          className={getStatusBadgeClass(
+                            establishment.availability_status
+                          )}
+                        >
+                          {establishment.availability_status}
+                        </Badge>
+                      </td>
+                      <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
+                        <div className='flex space-x-2'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            className='bg-blue-50 hover:bg-blue-100 border-blue-200'
+                            onClick={() =>
+                              handleViewReservations(establishment)
+                            }
+                          >
+                            <Eye className='w-4 h-4' />
+                          </Button>
+                          <Link
+                            href={`/admin/parking-management/edit/${establishment._id}`}
+                          >
+                            <Button variant='outline' size='sm'>
+                              <Edit className='w-4 h-4' />
+                            </Button>
+                          </Link>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() =>
+                              handleToggleStatus(establishment._id)
+                            }
+                            className={
+                              establishment.availability_status ===
+                              AvailabilityStatus.OPEN
+                                ? 'text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50'
+                                : 'text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50'
+                            }
+                          >
+                            {establishment.availability_status ===
+                            AvailabilityStatus.OPEN ? (
+                              <XCircle className='w-4 h-4' />
+                            ) : (
+                              <CheckCircle className='w-4 h-4' />
+                            )}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className='lg:hidden space-y-4'>
+            {filteredEstablishments.map((establishment) => (
+              <Card key={establishment._id} className='border border-gray-200'>
+                <CardHeader className='pb-3'>
+                  <div className='flex justify-between items-start'>
                     <div>
-                      <div className='text-sm font-medium text-gray-900'>
+                      <CardTitle className='text-lg'>
                         {establishment.establishment_name}
-                      </div>
-                      <div className='text-sm text-gray-500'>
+                      </CardTitle>
+                      <p className='text-sm text-gray-500 mt-1'>
                         {establishment.city}
-                      </div>
+                      </p>
                     </div>
-                  </td>
-                  <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                    <div className='flex items-center'>
-                      <MapPin className='w-4 h-4 mr-1' />
-                      {establishment.address}
-                    </div>
-                  </td>
-                  <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                    <div>
-                      <div>
-                        {establishment.available_spaces}/
-                        {establishment.total_spaces}
-                      </div>
-                      <div className='text-xs text-gray-400'>
-                        Available/Total
-                      </div>
-                    </div>
-                  </td>
-                  <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                    ₱{establishment.hourlyRate}/hr
-                  </td>
-                  <td className='px-6 py-4 whitespace-nowrap'>
                     <Badge
                       className={getStatusBadgeClass(
                         establishment.availability_status
@@ -727,118 +1258,99 @@ export default function ParkingManagement() {
                     >
                       {establishment.availability_status}
                     </Badge>
-                  </td>
-                  <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
-                    <div className='flex space-x-2'>
+                  </div>
+                </CardHeader>
+                <CardContent className='space-y-3'>
+                  <div className='flex items-start'>
+                    <MapPin className='w-4 h-4 mr-2 mt-0.5 text-gray-400 flex-shrink-0' />
+                    <span className='text-sm text-gray-600'>
+                      {establishment.address}
+                    </span>
+                  </div>
+                  <div className='grid grid-cols-2 gap-4 text-sm'>
+                    <div>
+                      <span className='font-medium text-gray-500'>
+                        Available Spots:
+                      </span>
+                      <p>
+                        {establishment.available_spaces}/
+                        {establishment.total_spaces}
+                      </p>
+                    </div>
+                    <div>
+                      <span className='font-medium text-gray-500'>Rates:</span>
+                      <p className='font-bold text-[#3B4A9C]'>
+                        ₱{establishment.hourlyRate}/hr
+                      </p>
+                      <p className='text-xs text-gray-500'>
+                        ₱{establishment.whole_day_rate}/day
+                      </p>
+                    </div>
+                  </div>
+                  <div className='flex gap-2 pt-2 border-t'>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      className='flex-1 bg-blue-50 hover:bg-blue-100 border-blue-200'
+                      onClick={() => handleViewReservations(establishment)}
+                    >
+                      <Eye className='w-4 h-4 mr-2' />
+                      View
+                    </Button>
+                    <Link
+                      href={`/admin/parking-management/edit/${establishment._id}`}
+                      className='flex-1'
+                    >
                       <Button
                         variant='outline'
                         size='sm'
-                        className='bg-blue-50 hover:bg-blue-100 border-blue-200'
-                        onClick={() => handleViewReservations(establishment)}
+                        className='w-full bg-transparent'
                       >
-                        <Eye className='w-4 h-4' />
+                        <Edit className='w-4 h-4 mr-2' />
+                        Edit
                       </Button>
-                      <Link
-                        href={`/admin/parking-management/edit/${establishment._id}`}
-                      >
-                        <Button variant='outline' size='sm'>
-                          <Edit className='w-4 h-4' />
-                        </Button>
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                    </Link>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => handleToggleStatus(establishment._id)}
+                      className={`flex-1 ${
+                        establishment.availability_status ===
+                        AvailabilityStatus.OPEN
+                          ? 'text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50'
+                          : 'text-green-600 hover:text-green-700 border-green-200 hover:bg-green-50'
+                      }`}
+                    >
+                      {establishment.availability_status ===
+                      AvailabilityStatus.OPEN ? (
+                        <>
+                          <XCircle className='w-4 h-4 mr-2' />
+                          Close
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className='w-4 h-4 mr-2' />
+                          Open
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
 
-      {/* Mobile Cards */}
-      <div className='lg:hidden space-y-4'>
-        {filteredEstablishments.map((establishment) => (
-          <Card key={establishment._id}>
-            <CardHeader className='pb-3'>
-              <div className='flex justify-between items-start'>
-                <div>
-                  <CardTitle className='text-lg'>
-                    {establishment.establishment_name}
-                  </CardTitle>
-                  <p className='text-sm text-gray-500 mt-1'>
-                    {establishment.city}
-                  </p>
-                </div>
-                <Badge
-                  className={getStatusBadgeClass(
-                    establishment.availability_status
-                  )}
-                >
-                  {establishment.availability_status}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className='space-y-3'>
-              <div className='flex items-start'>
-                <MapPin className='w-4 h-4 mr-2 mt-0.5 text-gray-400' />
-                <span className='text-sm text-gray-600'>
-                  {establishment.address}
-                </span>
-              </div>
-              <div className='grid grid-cols-2 gap-4 text-sm'>
-                <div>
-                  <span className='font-medium text-gray-500'>
-                    Available Spots:
-                  </span>
-                  <p>
-                    {establishment.available_spaces}/
-                    {establishment.total_spaces}
-                  </p>
-                </div>
-                <div>
-                  <span className='font-medium text-gray-500'>
-                    Hourly Rate:
-                  </span>
-                  <p className='font-bold text-[#3B4A9C]'>
-                    ₱{establishment.hourlyRate}
-                  </p>
-                </div>
-              </div>
-              <div className='flex gap-2 pt-2 border-t'>
-                <Button
-                  variant='outline'
-                  size='sm'
-                  className='flex-1 bg-blue-50 hover:bg-blue-100 border-blue-200'
-                  onClick={() => handleViewReservations(establishment)}
-                >
-                  <Eye className='w-4 h-4 mr-2' />
-                  View Reservations
-                </Button>
-                <Link
-                  href={`/admin/parking-management/edit/${establishment._id}`}
-                  className='flex-1'
-                >
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    className='w-full bg-transparent'
-                  >
-                    <Edit className='w-4 h-4 mr-2' />
-                    Edit
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredEstablishments.length === 0 && (
-        <div className='text-center py-8'>
-          <p className='text-gray-500'>
-            No establishments found matching your search.
-          </p>
-        </div>
-      )}
+          {filteredEstablishments.length === 0 && (
+            <div className='text-center py-8'>
+              <p className='text-gray-500'>
+                {searchTerm || getActiveFilterCount() > 0
+                  ? 'No establishments found matching your criteria.'
+                  : 'No establishments found.'}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Reservations Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -917,24 +1429,20 @@ export default function ParkingManagement() {
                           function formatDateRange(start: string, end: string) {
                             const startDate = new Date(start);
                             const endDate = new Date(end);
-
                             const startDateISO = startDate
                               .toISOString()
                               .split('T')[0];
                             const endDateISO = endDate
                               .toISOString()
                               .split('T')[0];
-
                             const displayDate =
                               startDateISO === endDateISO
                                 ? formatDateToLong(startDateISO)
                                 : `${formatDateToLong(
                                     startDateISO
                                   )} to ${formatDateToLong(endDateISO)}`;
-
                             return `${displayDate}`;
                           }
-
                           const timeRange = `${formatUtcTo12HourTime(
                             r.start_time
                           )} – ${formatUtcTo12HourTime(r.end_time)}`;
@@ -944,7 +1452,10 @@ export default function ParkingManagement() {
                           return (
                             <tr key={r._id} className='hover:bg-gray-50'>
                               <td className='px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900'>
-                                <div className='max-w-[120px] ' title={r._id}>
+                                <div
+                                  className='max-w-[120px] truncate'
+                                  title={r._id}
+                                >
                                   {r._id}
                                 </div>
                               </td>

@@ -240,56 +240,6 @@ export default function AddEstablishmentPage() {
                   </div>
                 </div>
 
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                  <div>
-                    <Label
-                      htmlFor='hourlyRate'
-                      className='text-lg font-medium mb-3 block text-gray-700'
-                    >
-                      Hourly Rate (₱)
-                    </Label>
-                    <Input
-                      id='hourlyRate'
-                      type='number'
-                      step='0.01'
-                      min='0'
-                      value={formData.hourlyRate}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          hourlyRate: Number(e.target.value),
-                        })
-                      }
-                      className='w-full p-4 text-lg border-2 border-gray-200 rounded-lg hover:border-blue-300 transition-colors'
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label
-                      htmlFor='wholeDayRate'
-                      className='text-lg font-medium mb-3 block text-gray-700'
-                    >
-                      Whole Day Rate (₱)
-                    </Label>
-                    <Input
-                      id='wholeDayRate'
-                      type='number'
-                      step='0.01'
-                      min='0'
-                      value={formData.wholeDayRate}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          wholeDayRate: Number(e.target.value),
-                        })
-                      }
-                      className='w-full p-4 text-lg border-2 border-gray-200 rounded-lg hover:border-blue-300 transition-colors'
-                      required
-                    />
-                  </div>
-                </div>
-
                 <div>
                   <Label
                     htmlFor='availabilityStatus'

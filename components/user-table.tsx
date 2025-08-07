@@ -46,13 +46,20 @@ interface User {
   updated_at?: string;
   reservations?: Reservation[];
   assigned_parking_spaces?: ParkingSpace[];
+  discount_level?: string;
+  discount_id?: string;
+  eligible_for_discount?: boolean;
 }
 
 interface UserTableProps {
   users: User[];
+  hideSearch?: boolean; // New prop to hide the search functionality
 }
 
-export default function UserTable({ users }: UserTableProps) {
+export default function UserTable({
+  users,
+  hideSearch = false,
+}: UserTableProps) {
   const { token } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -116,16 +123,24 @@ export default function UserTable({ users }: UserTableProps) {
     });
   }, [selectedUser, modalSearchQuery]);
 
+  // Only use internal search if hideSearch is false
+  const displayUsers = useMemo(() => {
+    if (hideSearch || !searchTerm.trim()) {
+      return users;
+    }
+
+    const query = searchTerm.toLowerCase();
+    return users.filter(
+      (user) =>
+        user.first_name.toLowerCase().includes(query) ||
+        user.last_name.toLowerCase().includes(query) ||
+        user.email.toLowerCase().includes(query) ||
+        user.role.toLowerCase().includes(query)
+    );
+  }, [users, searchTerm, hideSearch]);
+
   const handleSearch = (term: string) => {
     setSearchTerm(term);
-    const filtered = users.filter(
-      (user) =>
-        user.first_name.toLowerCase().includes(term.toLowerCase()) ||
-        user.last_name.toLowerCase().includes(term.toLowerCase()) ||
-        user.email.toLowerCase().includes(term.toLowerCase()) ||
-        user.role.toLowerCase().includes(term.toLowerCase())
-    );
-    setFilteredUsers(filtered);
   };
 
   const getStatusColor = (status: string) => {
@@ -199,7 +214,6 @@ export default function UserTable({ users }: UserTableProps) {
           reservations: updatedReservations || [],
         };
         setSelectedUser(updatedUser);
-
         // Also update user in main list
         setFilteredUsers((prev) =>
           prev.map((u) => (u._id === selectedUser._id ? updatedUser : u))
@@ -235,7 +249,7 @@ export default function UserTable({ users }: UserTableProps) {
       toast({
         title: 'Reservation Completed',
         description: 'Reservation has been marked as completed.',
-        variant: 'success',
+        variant: 'default',
       });
 
       // Update reservation status in the selected user's reservations
@@ -250,7 +264,6 @@ export default function UserTable({ users }: UserTableProps) {
           reservations: updatedReservations || [],
         };
         setSelectedUser(updatedUser);
-
         // Also update user in main list
         setFilteredUsers((prev) =>
           prev.map((u) => (u._id === selectedUser._id ? updatedUser : u))
@@ -505,20 +518,59 @@ export default function UserTable({ users }: UserTableProps) {
     );
   };
 
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case 'SUPER_ADMIN':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'ADMIN':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'DRIVER':
+        return 'bg-green-100 text-green-800 border-green-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const formatRole = (role: string) => {
+    switch (role) {
+      case 'SUPER_ADMIN':
+        return 'Super Admin';
+      case 'ADMIN':
+        return 'Admin';
+      case 'DRIVER':
+        return 'Driver';
+      default:
+        return role;
+    }
+  };
+
+  const formatStatus = (status: string) => {
+    switch (status) {
+      case UserStatus.ENABLED:
+        return 'Enabled';
+      case UserStatus.DISABLED:
+        return 'Disabled';
+      default:
+        return status;
+    }
+  };
+
   return (
-    <div className='space-y-6'>
-      {/* Search Only */}
-      <div className='flex flex-col sm:flex-row gap-4'>
-        <div className='relative flex-1'>
-          <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
-          <Input
-            placeholder='Search by name, email, or user type...'
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className='pl-10'
-          />
+    <div className='space-y-4'>
+      {/* Internal Search - only show if hideSearch is false */}
+      {!hideSearch && (
+        <div className='flex flex-col sm:flex-row gap-4'>
+          <div className='relative flex-1'>
+            <Search className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+            <Input
+              placeholder='Search by name, email, or user type...'
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              className='pl-10'
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Desktop Table */}
       <div className='overflow-x-auto border rounded-md shadow-sm'>
@@ -541,13 +593,19 @@ export default function UserTable({ users }: UserTableProps) {
                 Status
               </th>
               <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                Created At
+              </th>
+              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                 Reservations
+              </th>
+              <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                Discount
               </th>
               <th className='px-6 py-3' />
             </tr>
           </thead>
           <tbody className='divide-y divide-gray-200'>
-            {filteredUsers.map((user) => (
+            {displayUsers.map((user) => (
               <tr key={user._id}>
                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-700'>
                   {user.first_name} {user.middle_name} {user.last_name}
@@ -560,15 +618,11 @@ export default function UserTable({ users }: UserTableProps) {
                 </td>
                 <td className='px-6 py-4 whitespace-nowrap'>
                   <Badge
-                    className={`text-xs px-2 py-0.5 rounded-md ${
-                      user.role === 'SUPER_ADMIN'
-                        ? 'bg-red-100 text-red-800 border-red-200'
-                        : user.role === 'ADMIN'
-                        ? 'bg-blue-100 text-blue-800 border-blue-200'
-                        : 'bg-gray-100 text-gray-800 border-gray-200'
-                    }`}
+                    className={`text-xs px-2 py-0.5 rounded-md ${getRoleBadgeColor(
+                      user.role
+                    )}`}
                   >
-                    {user.role}
+                    {formatRole(user.role)}
                   </Badge>
                 </td>
                 <td className='px-6 py-4 whitespace-nowrap'>
@@ -576,11 +630,34 @@ export default function UserTable({ users }: UserTableProps) {
                     variant={getStatusColor(user.status)}
                     className='text-xs px-2 py-0.5 rounded-md'
                   >
-                    {user.status}
+                    {formatStatus(user.status)}
                   </Badge>
                 </td>
                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-700'>
+                  {user.created_at
+                    ? new Date(user.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : '-'}
+                </td>
+                <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-700'>
                   {user.reservations?.length || 0}
+                </td>
+                <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-700'>
+                  {user.eligible_for_discount ? (
+                    <div className='text-xs'>
+                      <div className='text-green-600 font-medium'>Eligible</div>
+                      {user.discount_level && (
+                        <div className='text-blue-600'>
+                          {user.discount_level} - {user.discount_id}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className='text-gray-400'>Not Eligible</span>
+                  )}
                 </td>
                 <td className='px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-1'>
                   <Dialog>
@@ -663,28 +740,24 @@ export default function UserTable({ users }: UserTableProps) {
                                 ) {
                                   const startDate = new Date(start);
                                   const endDate = new Date(end);
-
                                   const startDateISO = startDate
                                     .toISOString()
                                     .split('T')[0];
                                   const endDateISO = endDate
                                     .toISOString()
                                     .split('T')[0];
-
                                   const displayDate =
                                     startDateISO === endDateISO
                                       ? formatDateToLong(startDateISO)
                                       : `${formatDateToLong(
                                           startDateISO
                                         )} to ${formatDateToLong(endDateISO)}`;
-
                                   return `${displayDate}`;
                                 }
 
                                 const timeRange = `${formatUtcTo12HourTime(
                                   r.start_time
                                 )} – ${formatUtcTo12HourTime(r.end_time)}`;
-
                                 const paymentStatus =
                                   r.payments?.[0]?.payment_status;
 
@@ -932,7 +1005,14 @@ export default function UserTable({ users }: UserTableProps) {
         </table>
       </div>
 
-      {filteredUsers.length === 0 && (
+      {/* Results Summary - only show if using internal search */}
+      {!hideSearch && searchTerm && (
+        <div className='text-sm text-gray-600'>
+          Showing {displayUsers.length} of {users.length} users
+        </div>
+      )}
+
+      {displayUsers.length === 0 && (
         <div className='text-center text-sm text-gray-500 mt-6'>
           No users found matching your criteria.
         </div>
