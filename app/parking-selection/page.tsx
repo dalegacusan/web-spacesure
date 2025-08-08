@@ -191,8 +191,10 @@ export default function ParkingSelectionPage() {
                         </p>
                         <div className='bg-gray-50 rounded-lg p-2 sm:p-3 mt-3'>
                           <p className='text-xs sm:text-sm text-gray-700'>
-                            <span className='font-semibold'>Available:</span>{' '}
-                            {lot.available_spaces}/{lot.total_spaces} spaces
+                            <span className='font-semibold'>
+                              Available Spaces:
+                            </span>{' '}
+                            {lot.available_spaces}/{lot.total_spaces}
                           </p>
                         </div>
 

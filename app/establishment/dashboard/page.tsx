@@ -124,7 +124,7 @@ export default function EstablishmentDashboard() {
           <Card className='bg-white'>
             <CardContent className='p-4'>
               <div className='text-2xl font-bold'>{stats.total}</div>
-              <p className='text-gray-600'>Total Spaces</p>
+              <p className='text-gray-600'>Total Slots</p>
             </CardContent>
           </Card>
           <Card className='bg-white'>
@@ -132,7 +132,7 @@ export default function EstablishmentDashboard() {
               <div className='text-2xl font-bold text-green-600'>
                 {stats.available}
               </div>
-              <p className='text-gray-600'>Available</p>
+              <p className='text-gray-600'>Available Slots</p>
             </CardContent>
           </Card>
           <Card className='bg-white'>
@@ -140,7 +140,7 @@ export default function EstablishmentDashboard() {
               <div className='text-2xl font-bold text-red-600'>
                 {stats.occupied}
               </div>
-              <p className='text-gray-600'>Occupied</p>
+              <p className='text-gray-600'>Occupied Slots</p>
             </CardContent>
           </Card>
         </div>
@@ -179,8 +179,8 @@ export default function EstablishmentDashboard() {
                   {space.address}
                 </div>
                 <div className='grid grid-cols-2 text-sm gap-1'>
-                  <div>Total: {space.total_spaces}</div>
-                  <div>Available: {space.available_spaces}</div>
+                  <div>Total Slots: {space.total_spaces}</div>
+                  <div>Available Slots: {space.available_spaces}</div>
                   <div>Hourly: ₱{space.hourlyRate.toFixed(2)}</div>
                   <div>Daily: ₱{space.whole_day_rate.toFixed(2)}</div>
                 </div>

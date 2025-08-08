@@ -5,6 +5,12 @@ import Navbar from '@/components/navbar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -29,11 +35,13 @@ import {
   Car,
   CheckCircle,
   Clock,
+  CreditCard,
   DollarSign,
   Filter,
   Loader2,
   MapPin,
   MessageSquare,
+  Plus,
   Search,
   Settings,
   Star,
@@ -175,6 +183,40 @@ export default function ManageParkingSpace({
     amountRange: 'all',
   });
 
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPayments, setSelectedPayments] = useState<Payment[]>([]);
+  const [selectedReservationId, setSelectedReservationId] =
+    useState<string>('');
+
+  const findPaymentByMethod = (r: Reservation, method = 'paymaya') =>
+    r.payments?.find(
+      (p) => p.payment_method?.toLowerCase() === method.toLowerCase()
+    );
+
+  const getPreferredPaymentStatus = (
+    r: Reservation,
+    method = 'paymaya'
+  ): PaymentStatus =>
+    (findPaymentByMethod(r, method)?.payment_status ??
+      r?.payments?.[0]?.payment_status ??
+      PaymentStatus.PENDING) as PaymentStatus;
+
+  // Manual payment state
+  const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
+  const [selectedReservationForPayment, setSelectedReservationForPayment] =
+    useState<Reservation | null>(null);
+  const [isAddingPayment, setIsAddingPayment] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    amount: '',
+    payment_method: 'cash',
+    receipt_number: '',
+    reference_number: '',
+    notes: '',
+    actual_exit_date: '',
+    actual_exit_time: '',
+  });
+
   useEffect(() => {
     if (!loading && (!user || user.role !== UserRole.ADMIN)) {
       router.replace('/login');
@@ -268,6 +310,61 @@ export default function ManageParkingSpace({
     return reservations.filter((r) => isUpcoming(r.start_time));
   }, [reservations]);
 
+  // Calculate overtime penalty - Updated to handle both hourly and whole day reservations
+  const calculateOvertimePenalty = (
+    reservation: Reservation,
+    actualExitDateTime: string
+  ) => {
+    if (!actualExitDateTime) {
+      return {
+        penalty: 0,
+        overtimeHours: 0,
+        overtimeDays: 0,
+        totalAmount: reservation.total_price,
+      };
+    }
+
+    const scheduledEnd = new Date(reservation.end_time);
+    const actualExit = new Date(actualExitDateTime);
+
+    if (actualExit <= scheduledEnd) {
+      return {
+        penalty: 0,
+        overtimeHours: 0,
+        overtimeDays: 0,
+        totalAmount: reservation.total_price,
+      };
+    }
+
+    const overtimeMs = actualExit.getTime() - scheduledEnd.getTime();
+
+    if (reservation.reservation_type === 'hourly') {
+      // For hourly reservations, calculate overtime in hours
+      const overtimeHours = Math.ceil(overtimeMs / (1000 * 60 * 60)); // Round up to next hour
+      const penaltyRate = reservation.hourly_rate * 1.2; // 20% penalty (1.2 = 120%)
+      const penalty = penaltyRate * overtimeHours;
+
+      return {
+        penalty,
+        overtimeHours,
+        overtimeDays: 0,
+        totalAmount: penalty,
+      };
+    } else {
+      // For whole day reservations, calculate overtime in days
+      const overtimeDays = Math.ceil(overtimeMs / (1000 * 60 * 60 * 24)); // Round up to next day
+      const penaltyRate = reservation.whole_day_rate * 1.2; // 20% penalty (1.2 = 120%)
+      const penalty = penaltyRate * overtimeDays;
+
+      return {
+        penalty,
+        overtimeHours: 0,
+        overtimeDays,
+        totalAmount: penalty,
+      };
+    }
+  };
+
   // Filter reservations based on search query and filters
   const filteredReservations = useMemo(() => {
     let filtered = reservations;
@@ -319,8 +416,8 @@ export default function ManageParkingSpace({
       filters.paymentStatus !== 'all'
     ) {
       filtered = filtered.filter((r) => {
-        const paymentStatus = r.payments?.[0]?.payment_status || 'PENDING';
-        return paymentStatus === filters.paymentStatus;
+        const paymentStatus = getPreferredPaymentStatus(r, 'paymaya');
+        return paymentStatus === (filters.paymentStatus as PaymentStatus);
       });
     }
 
@@ -456,8 +553,7 @@ export default function ManageParkingSpace({
         }
       );
 
-      const data = await res.json(); // ✅ Parse response JSON
-
+      const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || 'Failed to update parking space.');
       }
@@ -465,7 +561,7 @@ export default function ManageParkingSpace({
       toast({
         title: 'Success',
         description: 'Parking space updated successfully.',
-        variant: 'default',
+        variant: 'success',
       });
     } catch (err) {
       toast({
@@ -503,6 +599,194 @@ export default function ManageParkingSpace({
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  // Handle manual payment addition
+  const handleAddManualPayment = async () => {
+    if (!selectedReservationForPayment || !token) return;
+
+    setIsAddingPayment(true);
+    try {
+      let finalAmount = parseFloat(paymentForm.amount);
+
+      const paymentData = {
+        reservation_id: selectedReservationForPayment._id,
+        amount: finalAmount,
+        payment_method: 'cash',
+        payment_status: PaymentStatus.COMPLETED,
+        receipt_number: paymentForm.receipt_number || undefined,
+        reference_number: paymentForm.reference_number || undefined,
+      };
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/payments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(paymentData),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to add payment');
+      }
+
+      toast({
+        title: 'Payment Added',
+        description:
+          'Manual payment has been successfully added to the reservation.',
+        variant: 'success',
+      });
+
+      // Update the reservation in state with the new payment
+      setReservations((prev) =>
+        prev.map((r) =>
+          r._id === selectedReservationForPayment._id
+            ? {
+                ...r,
+                payments: [
+                  ...(r.payments || []),
+                  { ...data, payment_status: PaymentStatus.COMPLETED },
+                ],
+                status: ReservationStatus.PAID,
+              }
+            : r
+        )
+      );
+
+      // Reset form and close modal
+      setPaymentForm({
+        amount: '',
+        payment_method: 'cash',
+        receipt_number: '',
+        reference_number: '',
+        notes: '',
+        actual_exit_date: '',
+        actual_exit_time: '',
+      });
+      setShowAddPaymentModal(false);
+      setSelectedReservationForPayment(null);
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err.message || 'Failed to add manual payment.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAddingPayment(false);
+    }
+  };
+
+  // Open add payment modal
+  const openAddPaymentModal = (reservation: Reservation) => {
+    setSelectedReservationForPayment(reservation);
+    setPaymentForm({
+      amount: reservation.total_price.toString(),
+      payment_method: 'cash',
+      receipt_number: '',
+      reference_number: '',
+      notes: '',
+      actual_exit_date: '',
+      actual_exit_time: '',
+    });
+    setShowAddPaymentModal(true);
+  };
+
+  // Open payment details modal
+  const openPaymentModal = (payments: Payment[], reservationId: string) => {
+    setSelectedPayments(payments);
+    setSelectedReservationId(reservationId);
+    setShowPaymentModal(true);
+  };
+
+  // Combined payment component that shows both status and count
+  const PaymentStatusAndCount = ({
+    reservation,
+  }: {
+    reservation: Reservation;
+  }) => {
+    const paymentCount = reservation.payments?.length || 0;
+    const paymentStatus = getPreferredPaymentStatus(reservation, 'paymaya');
+
+    if (paymentCount === 0) {
+      return (
+        <div className='flex flex-col items-center space-y-1'>
+          <Badge
+            className={
+              paymentStatus === PaymentStatus.COMPLETED
+                ? 'bg-blue-100 text-blue-800'
+                : paymentStatus === PaymentStatus.PENDING
+                ? 'bg-yellow-100 text-yellow-800'
+                : paymentStatus === PaymentStatus.FAILED
+                ? 'bg-red-100 text-red-800'
+                : 'bg-gray-100 text-gray-800'
+            }
+          >
+            {paymentStatus}
+          </Badge>
+          <span className='text-xs text-gray-400'>No payments</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className='flex flex-col items-center space-y-1'>
+        <Badge
+          className={
+            paymentStatus === PaymentStatus.COMPLETED
+              ? 'bg-blue-100 text-blue-800'
+              : paymentStatus === PaymentStatus.PENDING
+              ? 'bg-yellow-100 text-yellow-800'
+              : paymentStatus === PaymentStatus.FAILED
+              ? 'bg-red-100 text-red-800'
+              : 'bg-gray-100 text-gray-800'
+          }
+        >
+          {paymentStatus}
+        </Badge>
+        <Button
+          variant='ghost'
+          size='sm'
+          onClick={() =>
+            openPaymentModal(reservation.payments || [], reservation._id)
+          }
+          className='flex items-center space-x-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 h-6 px-2'
+        >
+          <CreditCard className='h-3 w-3' />
+          <span className='text-xs'>{paymentCount}</span>
+        </Button>
+      </div>
+    );
+  };
+
+  // Update amount when actual exit date/time changes
+  useEffect(() => {
+    if (
+      selectedReservationForPayment &&
+      paymentForm.actual_exit_date &&
+      paymentForm.actual_exit_time
+    ) {
+      const actualExitDateTime = `${paymentForm.actual_exit_date}T${paymentForm.actual_exit_time}:00.000Z`;
+      const { penalty } = calculateOvertimePenalty(
+        selectedReservationForPayment,
+        actualExitDateTime
+      );
+      // Set amount to penalty only, or original price if no penalty
+      const amountToSet =
+        penalty > 0 ? penalty : selectedReservationForPayment.total_price;
+      setPaymentForm((prev) => ({ ...prev, amount: amountToSet.toString() }));
+    } else if (selectedReservationForPayment) {
+      setPaymentForm((prev) => ({
+        ...prev,
+        amount: selectedReservationForPayment.total_price.toString(),
+      }));
+    }
+  }, [
+    paymentForm.actual_exit_date,
+    paymentForm.actual_exit_time,
+    selectedReservationForPayment,
+  ]);
 
   const handleCancelReservation = async (reservationId: string) => {
     setCancellingReservation(reservationId);
@@ -563,7 +847,7 @@ export default function ManageParkingSpace({
       toast({
         title: 'Reservation Completed',
         description: 'Reservation has been marked as completed.',
-        variant: 'default',
+        variant: 'success',
       });
 
       // Update reservation status in state
@@ -613,6 +897,20 @@ export default function ManageParkingSpace({
   const ActionButtons = ({ reservation }: { reservation: Reservation }) => {
     return (
       <div className='flex gap-2'>
+        {/* Add Payment Button - Show for all reservations that are not completed or cancelled */}
+        {reservation.status !== ReservationStatus.COMPLETED &&
+          reservation.status !== ReservationStatus.CANCELLED && (
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => openAddPaymentModal(reservation)}
+              className='border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all duration-200 flex items-center space-x-1'
+            >
+              <Plus className='h-4 w-4' />
+              <span className='hidden sm:inline'>Add Payment</span>
+            </Button>
+          )}
+
         {/* Cancel Button - only for CREATED reservations */}
         {reservation.status === ReservationStatus.CREATED && (
           <div className='relative'>
@@ -731,6 +1029,25 @@ export default function ManageParkingSpace({
   }) => {
     return (
       <div className='mt-3 pt-3 border-t border-gray-200 space-y-2'>
+        {/* Payment Details Button for Mobile */}
+        <div className='flex justify-center'>
+          <PaymentStatusAndCount reservation={reservation} />
+        </div>
+
+        {/* Add Payment Button for Mobile */}
+        {reservation.status !== ReservationStatus.COMPLETED &&
+          reservation.status !== ReservationStatus.CANCELLED && (
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => openAddPaymentModal(reservation)}
+              className='w-full border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all duration-200 flex items-center justify-center space-x-2'
+            >
+              <Plus className='h-4 w-4' />
+              <span>Add Payment</span>
+            </Button>
+          )}
+
         {/* Cancel Button for Mobile */}
         {reservation.status === ReservationStatus.CREATED && (
           <div>
@@ -1001,73 +1318,6 @@ export default function ManageParkingSpace({
                 </CardContent>
               </Card>
             </div>
-
-            {/* Today's Reservations Quick View */}
-            {todaysReservations.length > 0 && (
-              <Card className='bg-white'>
-                <CardHeader className='flex items-center justify-between'>
-                  <CardTitle className='flex items-center space-x-2'>
-                    <Clock className='h-5 w-5 text-orange-600' />
-                    <span>
-                      Today's Reservations ({todaysReservations.length})
-                    </span>
-                  </CardTitle>
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    className='text-blue-600 hover:text-blue-800'
-                    onClick={() => {
-                      setFilters({ ...filters, dateRange: 'today' });
-                      setActiveTab('reservations');
-                    }}
-                  >
-                    View All →
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className='space-y-3'>
-                    {todaysReservations.slice(0, 3).map((reservation) => (
-                      <div
-                        key={reservation._id}
-                        className='flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg'
-                      >
-                        <div className='flex items-center space-x-3'>
-                          <div className='w-2 h-2 bg-orange-500 rounded-full'></div>
-                          <div>
-                            <p className='font-medium text-sm'>
-                              {reservation.user.first_name}{' '}
-                              {reservation.user.last_name}
-                            </p>
-                            <p className='text-xs text-gray-600'>
-                              {reservation.vehicle?.plate_number} •{' '}
-                              {reservation.reservation_type === 'whole_day'
-                                ? 'Whole Day'
-                                : `${formatUtcTo12HourTime(
-                                    reservation.start_time
-                                  )} - ${formatUtcTo12HourTime(
-                                    reservation.end_time
-                                  )}`}
-                            </p>
-                          </div>
-                        </div>
-                        <Badge
-                          className={getReservationStatusBadge(
-                            reservation.status
-                          )}
-                        >
-                          {reservation.status}
-                        </Badge>
-                      </div>
-                    ))}
-                    {todaysReservations.length > 3 && (
-                      <p className='text-sm text-gray-500 text-center'>
-                        +{todaysReservations.length - 3} more reservations today
-                      </p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             {/* Recent Activity */}
             <Card className='bg-white'>
@@ -1691,7 +1941,7 @@ export default function ManageParkingSpace({
                             Status
                           </th>
                           <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                            Payment
+                            Payments
                           </th>
                           <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                             Actions
@@ -1718,8 +1968,6 @@ export default function ManageParkingSpace({
                               : `${formatDateToLong(
                                   startDateStr
                                 )} to ${formatDateToLong(endDateStr)}`;
-                          const paymentStatus =
-                            r.payments?.[0]?.payment_status || 'PENDING';
 
                           return (
                             <tr key={r._id} className='hover:bg-gray-50'>
@@ -1794,19 +2042,7 @@ export default function ManageParkingSpace({
                                 </Badge>
                               </td>
                               <td className='px-6 py-4 whitespace-nowrap'>
-                                <Badge
-                                  className={
-                                    paymentStatus === 'COMPLETED'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : paymentStatus === 'PENDING'
-                                      ? 'bg-yellow-100 text-yellow-800'
-                                      : paymentStatus === 'FAILED'
-                                      ? 'bg-red-100 text-red-800'
-                                      : 'bg-gray-100 text-gray-800'
-                                  }
-                                >
-                                  {paymentStatus}
-                                </Badge>
+                                <PaymentStatusAndCount reservation={r} />
                               </td>
                               <td className='px-6 py-4 whitespace-nowrap relative'>
                                 <ActionButtons reservation={r} />
@@ -1838,8 +2074,10 @@ export default function ManageParkingSpace({
                         : `${formatDateToLong(
                             startDateStr
                           )} to ${formatDateToLong(endDateStr)}`;
-                    const paymentStatus =
-                      r.payments?.[0]?.payment_status || 'PENDING';
+                    const paymentStatus = getPreferredPaymentStatus(
+                      r,
+                      'paymaya'
+                    );
 
                     return (
                       <div
@@ -1868,19 +2106,6 @@ export default function ManageParkingSpace({
                               }
                             >
                               {r.status}
-                            </Badge>
-                            <Badge
-                              className={
-                                paymentStatus === 'COMPLETED'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : paymentStatus === 'PENDING'
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : paymentStatus === 'FAILED'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }
-                            >
-                              {paymentStatus}
                             </Badge>
                             <Badge
                               variant='outline'
@@ -2086,6 +2311,355 @@ export default function ManageParkingSpace({
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Payment Details Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className='max-w-2xl max-h-[80vh] overflow-y-auto'>
+          <DialogHeader>
+            <DialogTitle>Payment Details</DialogTitle>
+            <p className='text-sm text-gray-600'>
+              Reservation #{selectedReservationId}
+            </p>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            {selectedPayments.map((payment, index) => (
+              <div
+                key={payment._id}
+                className='border rounded-lg p-4 bg-gray-50'
+              >
+                <div className='flex items-center justify-between mb-3'>
+                  <div className='flex items-center space-x-2'>
+                    <CreditCard className='h-4 w-4 text-gray-600' />
+                    <span className='font-medium text-gray-900'>
+                      Payment #{index + 1}
+                    </span>
+                  </div>
+                  <Badge
+                    className={
+                      payment.payment_status === 'COMPLETED'
+                        ? 'bg-green-100 text-green-800'
+                        : payment.payment_status === 'PENDING'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : payment.payment_status === 'FAILED'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }
+                  >
+                    {payment.payment_status}
+                  </Badge>
+                </div>
+
+                <div className='grid grid-cols-2 gap-4 text-sm'>
+                  <div>
+                    <span className='font-medium text-gray-600'>Method:</span>
+                    <p className='capitalize'>{payment.payment_method}</p>
+                  </div>
+                  <div>
+                    <span className='font-medium text-gray-600'>Amount:</span>
+                    <p className='font-bold text-[#3B4A9C]'>
+                      ₱{payment.amount.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className='font-medium text-gray-600'>Date:</span>
+                    <p>
+                      {payment.payment_date
+                        ? new Date(payment.payment_date).toLocaleDateString(
+                            'en-US',
+                            {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }
+                          )
+                        : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className='font-medium text-gray-600'>Receipt:</span>
+                    <p>
+                      {payment.receipt_number ? (
+                        <span className='font-mono text-xs bg-gray-200 px-2 py-1 rounded'>
+                          {payment.receipt_number}
+                        </span>
+                      ) : (
+                        <span className='text-gray-400 italic'>No receipt</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {payment.reference_number && (
+                  <div className='mt-3 pt-3 border-t border-gray-200'>
+                    <span className='font-medium text-gray-600 text-sm'>
+                      Reference:
+                    </span>
+                    <p className='font-mono text-xs text-gray-700 mt-1'>
+                      {payment.reference_number}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {selectedPayments.length > 1 && (
+              <div className='bg-blue-50 border border-blue-200 rounded-lg p-4'>
+                <div className='flex items-center justify-between'>
+                  <span className='font-medium text-blue-900'>
+                    Total Payments:
+                  </span>
+                  <span className='text-lg font-bold text-blue-900'>
+                    ₱
+                    {selectedPayments
+                      .reduce((sum, payment) => sum + payment.amount, 0)
+                      .toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Payment Modal */}
+      <Dialog open={showAddPaymentModal} onOpenChange={setShowAddPaymentModal}>
+        <DialogContent className='max-w-lg'>
+          <DialogHeader>
+            <DialogTitle className='flex items-center space-x-2'>
+              <span>Add Payment</span>
+            </DialogTitle>
+            <p className='text-sm text-gray-600'>
+              Add payment for reservation #{selectedReservationForPayment?._id}
+            </p>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            {/* Reservation Details */}
+            {selectedReservationForPayment && (
+              <div className='bg-gray-50 rounded-lg p-3 space-y-2'>
+                <div className='flex justify-between text-sm'>
+                  <span className='font-medium text-gray-600'>Customer:</span>
+                  <span>
+                    {selectedReservationForPayment.user.first_name}{' '}
+                    {selectedReservationForPayment.user.last_name}
+                  </span>
+                </div>
+                <div className='flex justify-between text-sm'>
+                  <span className='font-medium text-gray-600'>Vehicle:</span>
+                  <span>
+                    {selectedReservationForPayment.vehicle?.plate_number}
+                  </span>
+                </div>
+                <div className='flex justify-between text-sm'>
+                  <span className='font-medium text-gray-600'>
+                    Scheduled End:
+                  </span>
+                  <span>
+                    {formatUtcTo12HourTime(
+                      selectedReservationForPayment.end_time
+                    )}{' '}
+                    on{' '}
+                    {formatDateToLong(
+                      selectedReservationForPayment.end_time.split('T')[0]
+                    )}
+                  </span>
+                </div>
+                <div className='flex justify-between text-sm'>
+                  <span className='font-medium text-gray-600'>
+                    Original Amount:
+                  </span>
+                  <span className='font-bold text-[#3B4A9C]'>
+                    ₱{selectedReservationForPayment.total_price.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Actual Exit Date and Time - Always show for all reservations */}
+            <div className='space-y-3'>
+              <div>
+                <Label className='text-sm font-medium text-gray-700'>
+                  If the customer exceeded their reserved time, enter the actual
+                  exit date and time to calculate overtime penalties.
+                </Label>
+              </div>
+
+              <div className='grid grid-cols-2 gap-3'>
+                <div>
+                  <Label htmlFor='actualExitDate' className='text-sm'>
+                    Actual Exit Date
+                  </Label>
+                  <Input
+                    id='actualExitDate'
+                    type='date'
+                    value={paymentForm.actual_exit_date}
+                    onChange={(e) =>
+                      setPaymentForm({
+                        ...paymentForm,
+                        actual_exit_date: e.target.value,
+                      })
+                    }
+                    className='h-9'
+                  />
+                </div>
+                <div>
+                  <Label htmlFor='actualExitTime' className='text-sm'>
+                    Actual Exit Time
+                  </Label>
+                  <Input
+                    id='actualExitTime'
+                    type='time'
+                    value={paymentForm.actual_exit_time}
+                    onChange={(e) =>
+                      setPaymentForm({
+                        ...paymentForm,
+                        actual_exit_time: e.target.value,
+                      })
+                    }
+                    className='h-9'
+                  />
+                </div>
+              </div>
+
+              {paymentForm.actual_exit_date &&
+                paymentForm.actual_exit_time &&
+                selectedReservationForPayment && (
+                  <div className='p-3 bg-white rounded border'>
+                    {(() => {
+                      const actualExitDateTime = `${paymentForm.actual_exit_date}T${paymentForm.actual_exit_time}:00.000Z`;
+                      const { penalty, overtimeHours, overtimeDays } =
+                        calculateOvertimePenalty(
+                          selectedReservationForPayment,
+                          actualExitDateTime
+                        );
+
+                      if (penalty > 0) {
+                        return (
+                          <div className='text-sm'>
+                            <p className='text-red-600 font-medium'>
+                              Overtime Detected!
+                            </p>
+                            {selectedReservationForPayment.reservation_type ===
+                            'hourly' ? (
+                              <p className='text-gray-600'>
+                                Overtime: {overtimeHours} hour(s) × ₱
+                                {(
+                                  selectedReservationForPayment.hourly_rate *
+                                  1.2
+                                ).toFixed(2)}{' '}
+                                (Hourly Rate × 1.2) = ₱{penalty.toFixed(2)}
+                              </p>
+                            ) : (
+                              <p className='text-gray-600'>
+                                Overtime: {overtimeDays} day(s) × ₱
+                                {(
+                                  selectedReservationForPayment.whole_day_rate *
+                                  1.2
+                                ).toFixed(2)}{' '}
+                                (Whole Day Rate × 1.2) = ₱{penalty.toFixed(2)}
+                              </p>
+                            )}
+                            <p className='text-gray-500 text-xs mt-1'>
+                              Note: This is the overtime penalty amount only
+                            </p>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <p className='text-green-600 text-sm font-medium'>
+                            No overtime penalty - original reservation fee
+                            applies
+                          </p>
+                        );
+                      }
+                    })()}
+                  </div>
+                )}
+            </div>
+
+            {/* Payment Form */}
+            <div className='space-y-4'>
+              <div>
+                <Label htmlFor='paymentAmount'>
+                  Total Payment Amount (₱)
+                  <span style={{ color: 'red' }}> *</span>
+                </Label>
+                <Input
+                  id='paymentAmount'
+                  type='number'
+                  step='0.01'
+                  value={paymentForm.amount}
+                  onChange={(e) =>
+                    setPaymentForm({ ...paymentForm, amount: e.target.value })
+                  }
+                  placeholder='Enter payment amount'
+                  required
+                  className='font-medium'
+                />
+              </div>
+
+              <div>
+                <Label htmlFor='receiptNumber'>Receipt Number </Label>
+                <Input
+                  id='receiptNumber'
+                  value={paymentForm.receipt_number}
+                  onChange={(e) =>
+                    setPaymentForm({
+                      ...paymentForm,
+                      receipt_number: e.target.value,
+                    })
+                  }
+                  placeholder='Enter receipt number'
+                />
+              </div>
+
+              <div>
+                <Label htmlFor='referenceNumber'>Reference Number</Label>
+                <Input
+                  id='referenceNumber'
+                  value={paymentForm.reference_number}
+                  onChange={(e) =>
+                    setPaymentForm({
+                      ...paymentForm,
+                      reference_number: e.target.value,
+                    })
+                  }
+                  placeholder='Enter reference number'
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className='flex space-x-3 pt-4 border-t'>
+              <Button
+                variant='outline'
+                onClick={() => setShowAddPaymentModal(false)}
+                className='flex-1'
+                disabled={isAddingPayment}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddManualPayment}
+                disabled={isAddingPayment || !paymentForm.amount}
+                className='flex-1 bg-blue-600 hover:bg-blue-700'
+              >
+                {isAddingPayment ? (
+                  <div className='flex items-center space-x-2'>
+                    <Loader2 className='w-4 h-4 animate-spin' />
+                    <span>Adding Payment...</span>
+                  </div>
+                ) : (
+                  'Add Payment'
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1328,7 +1328,7 @@ export default function ReservationPage() {
                           ?.reserved_count || 0;
                       const available =
                         parkingLot.available_spaces - reservedForStartDate;
-                      return `${available} space${available !== 1 ? 's' : ''}`;
+                      return `${available}`;
                     })()}
                   </span>
                 </p>

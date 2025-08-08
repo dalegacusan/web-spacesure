@@ -4,6 +4,12 @@ import { useAuth } from '@/app/context/auth.context';
 import type { Reservation } from '@/app/establishment/manage/[id]/page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -14,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { PaymentStatus } from '@/lib/enums/payment-status.enum';
 import { ReservationStatus } from '@/lib/enums/reservation-status.enum';
 import { formatDateToLong, formatUtcTo12HourTime } from '@/lib/utils';
 import {
@@ -21,6 +28,7 @@ import {
   Calendar,
   CheckCircle,
   Clock,
+  CreditCard,
   Filter,
   Loader2,
   Search,
@@ -56,6 +64,24 @@ export default function ReservationsTable({ data }: Props) {
     null
   );
   const [showFilters, setShowFilters] = useState(false);
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPayments, setSelectedPayments] = useState<any[]>([]);
+  const [selectedReservationId, setSelectedReservationId] =
+    useState<string>('');
+
+  const findPaymentByMethod = (r: Reservation, method = 'paymaya') =>
+    r?.payments?.find(
+      (p) => p?.payment_method?.toLowerCase?.() === method.toLowerCase()
+    );
+
+  const getPreferredPaymentStatus = (
+    r: Reservation,
+    method = 'paymaya'
+  ): PaymentStatus =>
+    (findPaymentByMethod(r, method)?.payment_status ??
+      r?.payments?.[0]?.payment_status ??
+      PaymentStatus.PENDING) as PaymentStatus;
 
   // Filter states
   const [filters, setFilters] = useState<FilterState>({
@@ -159,7 +185,7 @@ export default function ReservationsTable({ data }: Props) {
       filters.paymentStatus !== 'all'
     ) {
       filtered = filtered.filter((r) => {
-        const paymentStatus = r.payments?.[0]?.payment_status || 'PENDING';
+        const paymentStatus = getPreferredPaymentStatus(r);
         return paymentStatus === filters.paymentStatus;
       });
     }
@@ -347,6 +373,51 @@ export default function ReservationsTable({ data }: Props) {
       setCompletingId(null);
       setShowCompleteDialog(null);
     }
+  };
+
+  const PaymentIcon = ({ reservation }: { reservation: Reservation }) => {
+    const paymentCount = reservation.payments?.length || 0;
+    const paymentStatus = getPreferredPaymentStatus(reservation);
+
+    const openPaymentModal = () => {
+      setSelectedPayments(reservation.payments || []);
+      setSelectedReservationId(reservation._id);
+      setShowPaymentModal(true);
+    };
+
+    return (
+      <div className='flex flex-col items-center space-y-1'>
+        {/* Payment Status Badge */}
+        <Badge
+          className={
+            paymentStatus === PaymentStatus.COMPLETED
+              ? 'bg-blue-100 text-blue-800'
+              : paymentStatus === PaymentStatus.PENDING
+              ? 'bg-yellow-100 text-yellow-800'
+              : paymentStatus === PaymentStatus.FAILED
+              ? 'bg-red-100 text-red-800'
+              : 'bg-gray-100 text-gray-800'
+          }
+        >
+          {paymentStatus}
+        </Badge>
+
+        {/* Payment Count Button */}
+        {paymentCount > 0 ? (
+          <Button
+            variant='ghost'
+            size='sm'
+            onClick={openPaymentModal}
+            className='h-8 px-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50'
+          >
+            <CreditCard className='h-4 w-4 mr-1' />
+            <span className='text-xs'>{paymentCount}</span>
+          </Button>
+        ) : (
+          <span className='text-xs text-gray-400'>No payments</span>
+        )}
+      </div>
+    );
   };
 
   const ActionButtons = ({ reservation }: { reservation: Reservation }) => {
@@ -854,10 +925,7 @@ export default function ReservationsTable({ data }: Props) {
                   Amount
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Status
-                </th>
-                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                  Payment
+                  Payments
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                   Actions
@@ -882,8 +950,6 @@ export default function ReservationsTable({ data }: Props) {
                 const timeRange = `${formatUtcTo12HourTime(
                   r.start_time
                 )} – ${formatUtcTo12HourTime(r.end_time)}`;
-                const paymentStatus =
-                  r.payments?.[0]?.payment_status || 'pending';
                 return (
                   <tr key={r._id} className='hover:bg-gray-50'>
                     <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900'>
@@ -936,34 +1002,7 @@ export default function ReservationsTable({ data }: Props) {
                       ₱{r.total_price.toFixed(2)}
                     </td>
                     <td className='px-6 py-4 whitespace-nowrap'>
-                      <Badge
-                        className={
-                          r.status === 'PAID'
-                            ? 'bg-blue-100 text-blue-800'
-                            : r.status === 'COMPLETED'
-                            ? 'bg-green-100 text-green-800'
-                            : r.status === 'CANCELLED'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }
-                      >
-                        {r.status}
-                      </Badge>
-                    </td>
-                    <td className='px-6 py-4 whitespace-nowrap'>
-                      <Badge
-                        className={
-                          paymentStatus === 'COMPLETED'
-                            ? 'bg-blue-100 text-blue-800'
-                            : paymentStatus === 'PENDING'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : paymentStatus === 'FAILED'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }
-                      >
-                        {paymentStatus}
-                      </Badge>
+                      <PaymentIcon reservation={r} />
                     </td>
                     <td className='px-6 py-4 whitespace-nowrap relative'>
                       <ActionButtons reservation={r} />
@@ -988,7 +1027,6 @@ export default function ReservationsTable({ data }: Props) {
             hour: '2-digit',
             minute: '2-digit',
           })}`;
-          const paymentStatus = r.payments?.[0]?.payment_status || 'pending';
 
           return (
             <div key={r._id} className='bg-white rounded-lg shadow p-4'>
@@ -1014,19 +1052,6 @@ export default function ReservationsTable({ data }: Props) {
                     }
                   >
                     {r.status}
-                  </Badge>
-                  <Badge
-                    className={
-                      paymentStatus === 'COMPLETED'
-                        ? 'bg-blue-100 text-blue-800'
-                        : paymentStatus === 'PENDING'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : paymentStatus === 'FAILED'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }
-                  >
-                    {paymentStatus}
                   </Badge>
                 </div>
               </div>
@@ -1081,6 +1106,15 @@ export default function ReservationsTable({ data }: Props) {
                 </div>
               </div>
 
+              <div className='mt-3 pt-3 border-t border-gray-200'>
+                <div className='flex justify-between items-center'>
+                  <span className='text-sm font-medium text-gray-500'>
+                    Payments:
+                  </span>
+                  <PaymentIcon reservation={r} />
+                </div>
+              </div>
+
               <MobileActionButtons reservation={r} />
             </div>
           );
@@ -1099,6 +1133,114 @@ export default function ReservationsTable({ data }: Props) {
           No reservations found.
         </div>
       )}
+      {/* Payment Details Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className='max-w-2xl'>
+          <DialogHeader>
+            <DialogTitle>Payment Details - {selectedReservationId}</DialogTitle>
+          </DialogHeader>
+          <div className='space-y-4'>
+            {selectedPayments.length > 0 ? (
+              <div className='space-y-3'>
+                {selectedPayments.map((payment, index) => (
+                  <div
+                    key={payment._id || index}
+                    className='border rounded-lg p-4 bg-gray-50'
+                  >
+                    <div className='grid grid-cols-2 gap-4'>
+                      <div>
+                        <p className='text-sm font-medium text-gray-700'>
+                          Payment Method
+                        </p>
+                        <p className='text-sm text-gray-900'>
+                          {payment.payment_method}
+                        </p>
+                      </div>
+                      <div>
+                        <p className='text-sm font-medium text-gray-700'>
+                          Status
+                        </p>
+                        <Badge
+                          className={
+                            payment.payment_status === PaymentStatus.COMPLETED
+                              ? 'bg-green-100 text-green-800'
+                              : payment.payment_status === PaymentStatus.PENDING
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : payment.payment_status === PaymentStatus.FAILED
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }
+                        >
+                          {payment.payment_status}
+                        </Badge>
+                      </div>
+                      <div>
+                        <p className='text-sm font-medium text-gray-700'>
+                          Amount
+                        </p>
+                        <p className='text-sm text-gray-900'>
+                          ₱{payment.amount?.toFixed(2) || '0.00'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className='text-sm font-medium text-gray-700'>
+                          Date
+                        </p>
+                        <p className='text-sm text-gray-900'>
+                          {payment.payment_date
+                            ? new Date(
+                                payment.payment_date
+                              ).toLocaleDateString()
+                            : 'N/A'}
+                        </p>
+                      </div>
+                      {payment.receipt_number && (
+                        <div>
+                          <p className='text-sm font-medium text-gray-700'>
+                            Receipt Number
+                          </p>
+                          <p className='text-sm text-gray-900'>
+                            {payment.receipt_number}
+                          </p>
+                        </div>
+                      )}
+                      {payment.reference_number && (
+                        <div>
+                          <p className='text-sm font-medium text-gray-700'>
+                            Reference Number
+                          </p>
+                          <p className='text-sm text-gray-900'>
+                            {payment.reference_number}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {selectedPayments.length > 1 && (
+                  <div className='border-t pt-3'>
+                    <div className='flex justify-between items-center'>
+                      <span className='font-medium text-gray-700'>
+                        Total Payments:
+                      </span>
+                      <span className='font-bold text-lg'>
+                        ₱
+                        {selectedPayments
+                          .reduce((sum, p) => sum + (p.amount || 0), 0)
+                          .toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className='text-center py-8 text-gray-500'>
+                No payment information available for this reservation.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

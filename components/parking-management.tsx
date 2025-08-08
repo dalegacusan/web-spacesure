@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { AvailabilityStatus } from '@/lib/enums/availability-status.enum';
+import { PaymentStatus } from '@/lib/enums/payment-status.enum';
 import { ReservationStatus } from '@/lib/enums/reservation-status.enum';
 import { UserRole } from '@/lib/enums/roles.enum';
 import { formatDateToLong, formatUtcTo12HourTime } from '@/lib/utils';
@@ -22,6 +23,7 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
+  CreditCard,
   Edit,
   Eye,
   Filter,
@@ -138,6 +140,12 @@ export default function ParkingManagement() {
   const [isLoadingReservations, setIsLoadingReservations] = useState(false);
   const [reservationSearchQuery, setReservationSearchQuery] = useState('');
 
+  // Add these state variables after the existing useState declarations
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPayments, setSelectedPayments] = useState<any[]>([]);
+  const [selectedReservationId, setSelectedReservationId] =
+    useState<string>('');
+
   // Action states
   const [confirmingCancel, setConfirmingCancel] = useState<string | null>(null);
   const [cancellingReservation, setCancellingReservation] = useState<
@@ -149,6 +157,19 @@ export default function ParkingManagement() {
   const [completingReservation, setCompletingReservation] = useState<
     string | null
   >(null);
+
+  const findPaymentByMethod = (r: Reservation, method = 'paymaya') =>
+    r.payments?.find(
+      (p) => p.payment_method?.toLowerCase() === method.toLowerCase()
+    );
+
+  const getPreferredPaymentStatus = (
+    r: Reservation,
+    method = 'paymaya'
+  ): PaymentStatus =>
+    (findPaymentByMethod(r, method)?.payment_status ??
+      r?.payments?.[0]?.payment_status ??
+      PaymentStatus.PENDING) as PaymentStatus;
 
   useEffect(() => {
     if (!loading && (!user || user.role !== UserRole.SUPER_ADMIN)) {
@@ -486,7 +507,7 @@ export default function ParkingManagement() {
       toast({
         title: 'Status Updated',
         description: `Establishment status changed to ${newStatus.toLowerCase()}.`,
-        variant: 'default',
+        variant: 'success',
       });
     } catch (err) {
       toast({
@@ -556,7 +577,7 @@ export default function ParkingManagement() {
       toast({
         title: 'Reservation Completed',
         description: 'Reservation has been marked as completed.',
-        variant: 'default',
+        variant: 'success',
       });
 
       // Update reservation status in state
@@ -588,6 +609,51 @@ export default function ParkingManagement() {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const PaymentIcon = ({ reservation }: { reservation: Reservation }) => {
+    const paymentCount = reservation.payments?.length || 0;
+    const paymentStatus = getPreferredPaymentStatus(reservation);
+
+    const openPaymentModal = () => {
+      setSelectedPayments(reservation.payments || []);
+      setSelectedReservationId(reservation._id);
+      setShowPaymentModal(true);
+    };
+
+    return (
+      <div className='flex flex-col items-center space-y-1'>
+        {/* Payment Status Badge */}
+        <Badge
+          className={
+            paymentStatus === PaymentStatus.COMPLETED
+              ? 'bg-blue-100 text-blue-800'
+              : paymentStatus === PaymentStatus.PENDING
+              ? 'bg-yellow-100 text-yellow-800'
+              : paymentStatus === PaymentStatus.FAILED
+              ? 'bg-red-100 text-red-800'
+              : 'bg-gray-100 text-gray-800'
+          }
+        >
+          {paymentStatus}
+        </Badge>
+
+        {/* Payment Count Button */}
+        {paymentCount > 0 ? (
+          <Button
+            variant='ghost'
+            size='sm'
+            onClick={openPaymentModal}
+            className='h-8 px-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50'
+          >
+            <CreditCard className='h-4 w-4 mr-1' />
+            <span className='text-xs'>{paymentCount}</span>
+          </Button>
+        ) : (
+          <span className='text-xs text-gray-400'>No payments</span>
+        )}
+      </div>
+    );
   };
 
   // Action buttons component for table
@@ -1122,7 +1188,7 @@ export default function ParkingManagement() {
                       Location
                     </th>
                     <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                      Spots
+                      Available/Total
                     </th>
                     <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                       Rate
@@ -1164,9 +1230,6 @@ export default function ParkingManagement() {
                           <div>
                             {establishment.available_spaces}/
                             {establishment.total_spaces}
-                          </div>
-                          <div className='text-xs text-gray-400'>
-                            Available/Total
                           </div>
                         </div>
                       </td>
@@ -1249,9 +1312,6 @@ export default function ParkingManagement() {
                   </div>
                   <div className='grid grid-cols-2 gap-4 text-sm'>
                     <div>
-                      <span className='font-medium text-gray-500'>
-                        Available Spots:
-                      </span>
                       <p>
                         {establishment.available_spaces}/
                         {establishment.total_spaces}
@@ -1394,10 +1454,7 @@ export default function ParkingManagement() {
                             Amount
                           </th>
                           <th className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                            Status
-                          </th>
-                          <th className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                            Payment
+                            Payments
                           </th>
                           <th className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                             Actions
@@ -1426,8 +1483,10 @@ export default function ParkingManagement() {
                           const timeRange = `${formatUtcTo12HourTime(
                             r.start_time
                           )} – ${formatUtcTo12HourTime(r.end_time)}`;
-                          const paymentStatus =
-                            r.payments?.[0]?.payment_status || 'pending';
+                          const paymentStatus = getPreferredPaymentStatus(
+                            r,
+                            'paymaya'
+                          );
 
                           return (
                             <tr key={r._id} className='hover:bg-gray-50'>
@@ -1475,34 +1534,7 @@ export default function ParkingManagement() {
                                 ₱{r.total_price.toFixed(2)}
                               </td>
                               <td className='px-4 py-4 whitespace-nowrap'>
-                                <Badge
-                                  className={
-                                    r.status === 'PAID'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : r.status === 'COMPLETED'
-                                      ? 'bg-green-100 text-green-800'
-                                      : r.status === 'CANCELLED'
-                                      ? 'bg-red-100 text-red-800'
-                                      : 'bg-gray-100 text-gray-800'
-                                  }
-                                >
-                                  {r.status}
-                                </Badge>
-                              </td>
-                              <td className='px-4 py-4 whitespace-nowrap'>
-                                <Badge
-                                  className={
-                                    paymentStatus === 'paid'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : paymentStatus === 'pending'
-                                      ? 'bg-yellow-100 text-yellow-800'
-                                      : paymentStatus === 'failed'
-                                      ? 'bg-red-100 text-red-800'
-                                      : 'bg-gray-100 text-gray-800'
-                                  }
-                                >
-                                  {paymentStatus}
-                                </Badge>
+                                <PaymentIcon reservation={r} />
                               </td>
                               <td className='px-4 py-4 whitespace-nowrap relative'>
                                 <ActionButtons reservation={r} />
@@ -1527,8 +1559,10 @@ export default function ParkingManagement() {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}`;
-                    const paymentStatus =
-                      r.payments?.[0]?.payment_status || 'pending';
+                    const paymentStatus = getPreferredPaymentStatus(
+                      r,
+                      'paymaya'
+                    );
 
                     return (
                       <div key={r._id} className='bg-gray-50 rounded-lg p-4'>
@@ -1541,33 +1575,14 @@ export default function ParkingManagement() {
                               {r.user.first_name} {r.user.last_name}
                             </p>
                           </div>
-                          <div className='flex flex-col gap-1'>
-                            <Badge
-                              className={
-                                r.status === 'PAID'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : r.status === 'COMPLETED'
-                                  ? 'bg-green-100 text-green-800'
-                                  : r.status === 'CANCELLED'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }
-                            >
-                              {r.status}
-                            </Badge>
-                            <Badge
-                              className={
-                                paymentStatus === 'paid'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : paymentStatus === 'pending'
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : paymentStatus === 'failed'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-gray-100 text-gray-800'
-                              }
-                            >
-                              {paymentStatus}
-                            </Badge>
+                          {/* Replace the existing payment status badges with */}
+                          <div className='mt-3 pt-3 border-t border-gray-200'>
+                            <div className='flex justify-between items-center'>
+                              <span className='text-sm font-medium text-gray-500'>
+                                Payments:
+                              </span>
+                              <PaymentIcon reservation={r} />
+                            </div>
                           </div>
                         </div>
 
@@ -1639,6 +1654,118 @@ export default function ParkingManagement() {
             )}
           </div>
         </DialogContent>
+        {/* Payment Details Modal */}
+        <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+          <DialogContent className='max-w-2xl'>
+            <DialogHeader>
+              <DialogTitle>
+                Payment Details - {selectedReservationId}
+              </DialogTitle>
+            </DialogHeader>
+            <div className='space-y-4'>
+              {selectedPayments.length > 0 ? (
+                <div className='space-y-3'>
+                  {selectedPayments.map((payment, index) => (
+                    <div
+                      key={payment._id || index}
+                      className='border rounded-lg p-4 bg-gray-50'
+                    >
+                      <div className='grid grid-cols-2 gap-4'>
+                        <div>
+                          <p className='text-sm font-medium text-gray-700'>
+                            Payment Method
+                          </p>
+                          <p className='text-sm text-gray-900'>
+                            {payment.payment_method}
+                          </p>
+                        </div>
+                        <div>
+                          <p className='text-sm font-medium text-gray-700'>
+                            Status
+                          </p>
+                          <Badge
+                            className={
+                              payment.payment_status === PaymentStatus.COMPLETED
+                                ? 'bg-green-100 text-green-800'
+                                : payment.payment_status ===
+                                  PaymentStatus.PENDING
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : payment.payment_status ===
+                                  PaymentStatus.FAILED
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }
+                          >
+                            {payment.payment_status}
+                          </Badge>
+                        </div>
+                        <div>
+                          <p className='text-sm font-medium text-gray-700'>
+                            Amount
+                          </p>
+                          <p className='text-sm text-gray-900'>
+                            ₱{payment.amount?.toFixed(2) || '0.00'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className='text-sm font-medium text-gray-700'>
+                            Date
+                          </p>
+                          <p className='text-sm text-gray-900'>
+                            {payment.payment_date
+                              ? new Date(
+                                  payment.payment_date
+                                ).toLocaleDateString()
+                              : 'N/A'}
+                          </p>
+                        </div>
+                        {payment.receipt_number && (
+                          <div>
+                            <p className='text-sm font-medium text-gray-700'>
+                              Receipt Number
+                            </p>
+                            <p className='text-sm text-gray-900'>
+                              {payment.receipt_number}
+                            </p>
+                          </div>
+                        )}
+                        {payment.reference_number && (
+                          <div>
+                            <p className='text-sm font-medium text-gray-700'>
+                              Reference Number
+                            </p>
+                            <p className='text-sm text-gray-900'>
+                              {payment.reference_number}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {selectedPayments.length > 1 && (
+                    <div className='border-t pt-3'>
+                      <div className='flex justify-between items-center'>
+                        <span className='font-medium text-gray-700'>
+                          Total Payments:
+                        </span>
+                        <span className='font-bold text-lg'>
+                          ₱
+                          {selectedPayments
+                            .reduce((sum, p) => sum + (p.amount || 0), 0)
+                            .toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className='text-center py-8 text-gray-500'>
+                  No payment information available for this reservation.
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </Dialog>
     </div>
   );

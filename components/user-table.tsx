@@ -24,6 +24,7 @@ import { formatDateToLong, formatUtcTo12HourTime } from '@/lib/utils';
 import {
   AlertTriangle,
   CheckCircle,
+  CreditCard,
   Edit,
   Eye,
   Loader2,
@@ -76,6 +77,12 @@ export default function UserTable({
   const [completingReservation, setCompletingReservation] = useState<
     string | null
   >(null);
+
+  // Add these state variables after the existing useState declarations
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPayments, setSelectedPayments] = useState<any[]>([]);
+  const [selectedReservationId, setSelectedReservationId] =
+    useState<string>('');
 
   useEffect(() => {
     setFilteredUsers(users);
@@ -284,6 +291,77 @@ export default function UserTable({
   const handleModalOpen = (user: User) => {
     setSelectedUser(user);
     setModalSearchQuery(''); // Reset search when opening modal
+  };
+
+  const getPreferredPaymentStatus = (
+    reservation: Reservation
+  ): PaymentStatus => {
+    if (!reservation.payments || reservation.payments.length === 0) {
+      return PaymentStatus.PENDING;
+    }
+
+    const completedPayment = reservation.payments.find(
+      (payment) => payment.payment_status === PaymentStatus.COMPLETED
+    );
+
+    if (completedPayment) {
+      return PaymentStatus.COMPLETED;
+    }
+
+    const failedPayment = reservation.payments.find(
+      (payment) => payment.payment_status === PaymentStatus.FAILED
+    );
+
+    if (failedPayment) {
+      return PaymentStatus.FAILED;
+    }
+
+    return PaymentStatus.PENDING;
+  };
+
+  const PaymentIcon = ({ reservation }: { reservation: Reservation }) => {
+    const paymentCount = reservation.payments?.length || 0;
+    const paymentStatus = getPreferredPaymentStatus(reservation);
+
+    const openPaymentModal = () => {
+      setSelectedPayments(reservation.payments || []);
+      setSelectedReservationId(reservation._id);
+      setShowPaymentModal(true);
+    };
+
+    return (
+      <div className='flex flex-col items-center space-y-1'>
+        {/* Payment Status Badge */}
+        <Badge
+          className={
+            paymentStatus === PaymentStatus.COMPLETED
+              ? 'bg-blue-100 text-blue-800'
+              : paymentStatus === PaymentStatus.PENDING
+              ? 'bg-yellow-100 text-yellow-800'
+              : paymentStatus === PaymentStatus.FAILED
+              ? 'bg-red-100 text-red-800'
+              : 'bg-gray-100 text-gray-800'
+          }
+        >
+          {paymentStatus}
+        </Badge>
+
+        {/* Payment Count Button */}
+        {paymentCount > 0 ? (
+          <Button
+            variant='ghost'
+            size='sm'
+            onClick={openPaymentModal}
+            className='h-8 px-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50'
+          >
+            <CreditCard className='h-4 w-4 mr-1' />
+            <span className='text-xs'>{paymentCount}</span>
+          </Button>
+        ) : (
+          <span className='text-xs text-gray-400'>No payments</span>
+        )}
+      </div>
+    );
   };
 
   // Action buttons component for desktop table
@@ -725,7 +803,7 @@ export default function UserTable({
                                   Status
                                 </th>
                                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                                  Payment
+                                  Payments
                                 </th>
                                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                                   Actions
@@ -832,22 +910,7 @@ export default function UserTable({
                                       </Badge>
                                     </td>
                                     <td className='px-6 py-4 whitespace-nowrap'>
-                                      <Badge
-                                        variant={
-                                          paymentStatus ===
-                                          PaymentStatus.COMPLETED
-                                            ? 'default'
-                                            : paymentStatus ===
-                                              PaymentStatus.PENDING
-                                            ? 'secondary'
-                                            : paymentStatus ===
-                                              PaymentStatus.FAILED
-                                            ? 'destructive'
-                                            : 'default'
-                                        }
-                                      >
-                                        {paymentStatus}
-                                      </Badge>
+                                      <PaymentIcon reservation={r} />
                                     </td>
                                     <td className='px-6 py-4 whitespace-nowrap relative'>
                                       <ActionButtons reservation={r} />
@@ -904,19 +967,15 @@ export default function UserTable({
                                   >
                                     {r.status}
                                   </Badge>
-                                  <Badge
-                                    className={
-                                      paymentStatus === 'paid'
-                                        ? 'bg-blue-100 text-blue-800'
-                                        : paymentStatus === 'pending'
-                                        ? 'bg-yellow-100 text-yellow-800'
-                                        : paymentStatus === 'failed'
-                                        ? 'bg-red-100 text-red-800'
-                                        : 'bg-gray-100 text-gray-800'
-                                    }
-                                  >
-                                    {paymentStatus}
-                                  </Badge>
+                                  {/* Replace the existing payment status badges with */}
+                                  <div className='mt-3 pt-3 border-t border-gray-200'>
+                                    <div className='flex justify-between items-center'>
+                                      <span className='text-sm font-medium text-gray-500'>
+                                        Payments:
+                                      </span>
+                                      <PaymentIcon reservation={r} />
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
 
@@ -1017,6 +1076,114 @@ export default function UserTable({
           No users found matching your criteria.
         </div>
       )}
+      {/* Payment Details Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className='max-w-2xl'>
+          <DialogHeader>
+            <DialogTitle>Payment Details - {selectedReservationId}</DialogTitle>
+          </DialogHeader>
+          <div className='space-y-4'>
+            {selectedPayments.length > 0 ? (
+              <div className='space-y-3'>
+                {selectedPayments.map((payment, index) => (
+                  <div
+                    key={payment._id || index}
+                    className='border rounded-lg p-4 bg-gray-50'
+                  >
+                    <div className='grid grid-cols-2 gap-4'>
+                      <div>
+                        <p className='text-sm font-medium text-gray-700'>
+                          Payment Method
+                        </p>
+                        <p className='text-sm text-gray-900'>
+                          {payment.payment_method}
+                        </p>
+                      </div>
+                      <div>
+                        <p className='text-sm font-medium text-gray-700'>
+                          Status
+                        </p>
+                        <Badge
+                          className={
+                            payment.payment_status === PaymentStatus.COMPLETED
+                              ? 'bg-green-100 text-green-800'
+                              : payment.payment_status === PaymentStatus.PENDING
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : payment.payment_status === PaymentStatus.FAILED
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }
+                        >
+                          {payment.payment_status}
+                        </Badge>
+                      </div>
+                      <div>
+                        <p className='text-sm font-medium text-gray-700'>
+                          Amount
+                        </p>
+                        <p className='text-sm text-gray-900'>
+                          ₱{payment.amount?.toFixed(2) || '0.00'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className='text-sm font-medium text-gray-700'>
+                          Date
+                        </p>
+                        <p className='text-sm text-gray-900'>
+                          {payment.payment_date
+                            ? new Date(
+                                payment.payment_date
+                              ).toLocaleDateString()
+                            : 'N/A'}
+                        </p>
+                      </div>
+                      {payment.receipt_number && (
+                        <div>
+                          <p className='text-sm font-medium text-gray-700'>
+                            Receipt Number
+                          </p>
+                          <p className='text-sm text-gray-900'>
+                            {payment.receipt_number}
+                          </p>
+                        </div>
+                      )}
+                      {payment.reference_number && (
+                        <div>
+                          <p className='text-sm font-medium text-gray-700'>
+                            Reference Number
+                          </p>
+                          <p className='text-sm text-gray-900'>
+                            {payment.reference_number}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {selectedPayments.length > 1 && (
+                  <div className='border-t pt-3'>
+                    <div className='flex justify-between items-center'>
+                      <span className='font-medium text-gray-700'>
+                        Total Payments:
+                      </span>
+                      <span className='font-bold text-lg'>
+                        ₱
+                        {selectedPayments
+                          .reduce((sum, p) => sum + (p.amount || 0), 0)
+                          .toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className='text-center py-8 text-gray-500'>
+                No payment information available for this reservation.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

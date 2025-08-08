@@ -5,11 +5,28 @@ import { Vehicle } from '@/app/establishment/manage/[id]/page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { ReservationStatus } from '@/lib/enums/reservation-status.enum';
-import { AlertTriangle, XCircle } from 'lucide-react';
+import { AlertTriangle, CreditCard, Receipt, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
+
+interface Payment {
+  _id: string;
+  reservation_id: string;
+  payment_method: string;
+  amount: number;
+  payment_status: string;
+  payment_date: string | null;
+  receipt_number: string | null;
+  reference_number: string | null;
+}
 
 interface HistoryItem {
   id: string;
@@ -20,6 +37,7 @@ interface HistoryItem {
   amount: string;
   status: ReservationStatus;
   vehicle: Vehicle;
+  payments: Payment[];
 }
 
 export default function HistoryTable() {
@@ -33,6 +51,10 @@ export default function HistoryTable() {
   const [showConfirmDialog, setShowConfirmDialog] = useState<string | null>(
     null
   );
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPayments, setSelectedPayments] = useState<Payment[]>([]);
+  const [selectedReservationId, setSelectedReservationId] =
+    useState<string>('');
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -118,13 +140,68 @@ export default function HistoryTable() {
     }
   };
 
+  const openPaymentModal = (payments: Payment[], reservationId: string) => {
+    setSelectedPayments(payments);
+    setSelectedReservationId(reservationId);
+    setShowPaymentModal(true);
+  };
+
+  const getPaymentStatusBadge = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'failed':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatPaymentDate = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const PaymentIcon = ({ item }: { item: HistoryItem }) => {
+    const paymentCount = item.payments?.length || 0;
+
+    if (paymentCount === 0) {
+      return (
+        <div className='flex items-center justify-center'>
+          <span className='text-xs text-gray-400 italic'>No payments</span>
+        </div>
+      );
+    }
+
+    return (
+      <Button
+        variant='ghost'
+        size='sm'
+        onClick={() => openPaymentModal(item.payments, item.id)}
+        className='flex items-center space-x-1 hover:bg-blue-50'
+      >
+        <CreditCard className='h-4 w-4 text-blue-600' />
+        <span className='text-xs text-blue-600'>
+          {paymentCount} payment{paymentCount > 1 ? 's' : ''}
+        </span>
+      </Button>
+    );
+  };
+
   const CancelButton = ({ item }: { item: HistoryItem }) => {
     if (item.status !== ReservationStatus.CREATED) return null;
 
     return (
       <div className='relative'>
         {showConfirmDialog === item.id ? (
-          // Confirmation Dialog - positioned absolutely to avoid table overflow issues
           <div className='absolute right-0 top-0 z-50 bg-white border-2 border-red-200 rounded-lg shadow-lg p-3 min-w-[280px]'>
             <div className='flex items-center space-x-2 mb-3'>
               <AlertTriangle className='h-4 w-4 text-red-600 flex-shrink-0' />
@@ -160,7 +237,6 @@ export default function HistoryTable() {
             </div>
           </div>
         ) : (
-          // Cancel Button
           <Button
             variant='outline'
             size='sm'
@@ -181,7 +257,6 @@ export default function HistoryTable() {
     return (
       <div className='mt-3 pt-3 border-t border-gray-200'>
         {showConfirmDialog === item.id ? (
-          // Mobile Confirmation Dialog
           <div className='bg-red-50 border border-red-200 rounded-lg p-3'>
             <div className='flex items-center space-x-2 mb-3'>
               <AlertTriangle className='h-5 w-5 text-red-600' />
@@ -217,7 +292,6 @@ export default function HistoryTable() {
             </div>
           </div>
         ) : (
-          // Mobile Cancel Button
           <Button
             variant='outline'
             size='sm'
@@ -253,7 +327,6 @@ export default function HistoryTable() {
       {/* Desktop Table */}
       <div className='hidden lg:block'>
         <div className='bg-white rounded-lg shadow'>
-          {/* Removed overflow-hidden to allow confirmation dialog to show */}
           <table className='min-w-full divide-y divide-gray-200'>
             <thead className='bg-gray-50'>
               <tr>
@@ -277,6 +350,9 @@ export default function HistoryTable() {
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                   Status
+                </th>
+                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  Payments
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                   Actions
@@ -333,8 +409,10 @@ export default function HistoryTable() {
                       {item.status}
                     </Badge>
                   </td>
+                  <td className='px-6 py-4 whitespace-nowrap'>
+                    <PaymentIcon item={item} />
+                  </td>
                   <td className='px-6 py-4 whitespace-nowrap relative'>
-                    {/* Added relative positioning to the table cell */}
                     <CancelButton item={item} />
                   </td>
                 </tr>
@@ -366,7 +444,7 @@ export default function HistoryTable() {
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className='space-y-2'>
+            <CardContent className='space-y-4'>
               <div className='grid grid-cols-2 gap-4 text-sm'>
                 <div>
                   <span className='font-medium text-gray-500'>Vehicle:</span>
@@ -401,14 +479,23 @@ export default function HistoryTable() {
                   <p>{item.duration}</p>
                 </div>
               </div>
+
               <div className='pt-2 border-t'>
-                <div className='flex justify-between items-center'>
-                  <span className='font-medium text-gray-500'>Amount:</span>
+                <div className='flex justify-between items-center mb-3'>
+                  <span className='font-medium text-gray-500'>
+                    Total Amount:
+                  </span>
                   <span className='text-lg font-bold text-[#3B4A9C]'>
                     {item.amount}
                   </span>
                 </div>
               </div>
+
+              {/* Payment Button for Mobile */}
+              <div className='pt-2 border-t'>
+                <PaymentIcon item={item} />
+              </div>
+
               <MobileCancelButton item={item} />
             </CardContent>
           </Card>
@@ -422,6 +509,102 @@ export default function HistoryTable() {
           </p>
         </div>
       )}
+
+      {/* Payment Details Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className='max-w-2xl max-h-[80vh] overflow-y-auto'>
+          <DialogHeader>
+            <DialogTitle className='flex items-center space-x-2'>
+              <Receipt className='h-5 w-5' />
+              <span>Payment Details</span>
+            </DialogTitle>
+            <p className='text-sm text-gray-600'>
+              Reservation ID: {selectedReservationId}
+            </p>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            {selectedPayments.map((payment, index) => (
+              <div
+                key={payment._id}
+                className='bg-gray-50 rounded-lg p-4 border'
+              >
+                <div className='flex items-center justify-between mb-3'>
+                  <div className='flex items-center space-x-2'>
+                    <CreditCard className='h-4 w-4 text-gray-600' />
+                    <span className='font-medium text-gray-700'>
+                      Payment #{index + 1}
+                    </span>
+                  </div>
+                  <Badge
+                    className={getPaymentStatusBadge(payment.payment_status)}
+                  >
+                    {payment.payment_status.toUpperCase()}
+                  </Badge>
+                </div>
+
+                <div className='grid grid-cols-2 gap-4'>
+                  <div>
+                    <span className='text-sm text-gray-500'>Method:</span>
+                    <p className='font-medium capitalize'>
+                      {payment.payment_method}
+                    </p>
+                  </div>
+                  <div>
+                    <span className='text-sm text-gray-500'>Amount:</span>
+                    <p className='font-bold text-[#3B4A9C]'>
+                      ₱{payment.amount.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className='text-sm text-gray-500'>Date:</span>
+                    <p className='font-medium'>
+                      {formatPaymentDate(payment.payment_date)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className='text-sm text-gray-500'>Receipt:</span>
+                    <p className='font-medium'>
+                      {payment.receipt_number ? (
+                        <span className='font-mono text-xs bg-white px-2 py-1 rounded border'>
+                          {payment.receipt_number}
+                        </span>
+                      ) : (
+                        <span className='text-gray-400 italic'>No receipt</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {payment.reference_number && (
+                  <div className='mt-3 pt-3 border-t border-gray-200'>
+                    <span className='text-sm text-gray-500'>Reference: </span>
+                    <span className='font-mono text-sm bg-white px-2 py-1 rounded border'>
+                      {payment.reference_number}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {selectedPayments.length > 1 && (
+              <div className='bg-blue-50 rounded-lg p-4 border border-blue-200'>
+                <div className='flex items-center justify-between'>
+                  <span className='font-medium text-blue-700'>
+                    Total Payments:
+                  </span>
+                  <span className='text-xl font-bold text-blue-800'>
+                    ₱
+                    {selectedPayments
+                      .reduce((sum, payment) => sum + payment.amount, 0)
+                      .toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
