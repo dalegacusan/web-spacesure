@@ -33,6 +33,7 @@ import {
   ArrowLeft,
   Calendar,
   Car,
+  CarFront,
   CheckCircle,
   Clock,
   CreditCard,
@@ -216,6 +217,10 @@ export default function ManageParkingSpace({
     actual_exit_date: '',
     actual_exit_time: '',
   });
+
+  // Car In state
+  const [confirmingCarIn, setConfirmingCarIn] = useState<string | null>(null);
+  const [markingCarIn, setMarkingCarIn] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && (!user || user.role !== UserRole.ADMIN)) {
@@ -595,6 +600,8 @@ export default function ManageParkingSpace({
         return 'bg-green-100 text-green-800';
       case 'paid':
         return 'bg-purple-100 text-purple-800';
+      case 'car_in':
+        return 'bg-blue-100 text-blue-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -871,6 +878,48 @@ export default function ManageParkingSpace({
     }
   };
 
+  // Handle Car In functionality
+  const handleCarIn = async (reservationId: string) => {
+    setMarkingCarIn(reservationId);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/reservations/${reservationId}/car-in`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!res.ok) throw new Error('Failed to mark car as arrived');
+
+      toast({
+        title: 'Car Arrival Confirmed',
+        description: 'The car has been marked as arrived.',
+        variant: 'success',
+      });
+
+      // Update reservation status in state
+      setReservations((prev) =>
+        prev.map((r) =>
+          r._id === reservationId
+            ? { ...r, status: ReservationStatus.CAR_IN }
+            : r
+        )
+      );
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to mark car as arrived.',
+        variant: 'destructive',
+      });
+    } finally {
+      setMarkingCarIn(null);
+      setConfirmingCarIn(null);
+    }
+  };
+
   // Render stars for feedback display
   const renderStars = (rating: number) => {
     const stars = [];
@@ -898,6 +947,58 @@ export default function ManageParkingSpace({
   const ActionButtons = ({ reservation }: { reservation: Reservation }) => {
     return (
       <div className='flex gap-2'>
+        {/* Car In Button - only for PAID reservations */}
+        {reservation.status === ReservationStatus.PAID && (
+          <div className='relative'>
+            {confirmingCarIn === reservation._id ? (
+              // Car In Confirmation Dialog
+              <div className='absolute right-0 top-0 z-50 bg-white border-2 border-blue-200 rounded-lg shadow-lg p-3 min-w-[280px]'>
+                <div className='flex items-center space-x-2 mb-3'>
+                  <CarFront className='h-4 w-4 text-blue-600 flex-shrink-0' />
+                  <span className='text-sm text-blue-700 font-medium'>
+                    Mark car as arrived?
+                  </span>
+                </div>
+                <div className='flex space-x-2'>
+                  <Button
+                    size='sm'
+                    onClick={() => handleCarIn(reservation._id)}
+                    disabled={markingCarIn === reservation._id}
+                    className='flex-1 h-8 bg-blue-600 hover:bg-blue-700'
+                  >
+                    {markingCarIn === reservation._id ? (
+                      <div className='flex items-center space-x-1'>
+                        <Loader2 className='w-3 h-3 animate-spin' />
+                        <span>Marking...</span>
+                      </div>
+                    ) : (
+                      'Yes, Car In'
+                    )}
+                  </Button>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    onClick={() => setConfirmingCarIn(null)}
+                    className='flex-1 h-8 border-gray-300'
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              // Car In Button
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => setConfirmingCarIn(reservation._id)}
+                className='border-green-300 text-green-600 hover:bg-green-50 hover:border-green-400 hover:text-green-700 transition-all duration-200 flex items-center space-x-1'
+              >
+                <CarFront className='h-4 w-4' />
+                <span className='hidden sm:inline'>Car In</span>
+              </Button>
+            )}
+          </div>
+        )}
         {/* Add Payment Button - Show for all reservations that are not completed or cancelled */}
         {reservation.status !== ReservationStatus.COMPLETED &&
           reservation.status !== ReservationStatus.CANCELLED &&
@@ -968,8 +1069,8 @@ export default function ManageParkingSpace({
           </div>
         )}
 
-        {/* Complete Button - only for PAID reservations */}
-        {reservation.status === ReservationStatus.PAID && (
+        {/* Complete Button - only for CAR_IN reservations */}
+        {reservation.status === ReservationStatus.CAR_IN && (
           <div className='relative'>
             {confirmingComplete === reservation._id ? (
               // Complete Confirmation Dialog
@@ -1009,12 +1110,11 @@ export default function ManageParkingSpace({
             ) : (
               // Complete Button
               <Button
-                variant='outline'
                 size='sm'
                 onClick={() => setConfirmingComplete(reservation._id)}
-                className='border-green-300 text-green-600 hover:bg-green-50 hover:border-green-400 hover:text-green-700 transition-all duration-200 flex items-center space-x-1'
+                className='bg-green-600 text-white hover:bg-green-700 transition-all duration-200 flex items-center space-x-1'
               >
-                <CheckCircle className='h-4 w-4' />
+                <CheckCircle className='h-4 w-4 text-white' />
                 <span className='hidden sm:inline'>Complete</span>
               </Button>
             )}
@@ -1052,6 +1152,59 @@ export default function ManageParkingSpace({
               <span>Add Payment</span>
             </Button>
           )}
+
+        {/* Car In Button for Mobile */}
+        {reservation.status === ReservationStatus.PAID && (
+          <div>
+            {confirmingCarIn === reservation._id ? (
+              // Mobile Car In Confirmation Dialog
+              <div className='bg-blue-50 border border-blue-200 rounded-lg p-3'>
+                <div className='flex items-center space-x-2 mb-3'>
+                  <CarFront className='h-5 w-5 text-blue-600' />
+                  <span className='text-sm font-medium text-blue-700'>
+                    Mark car as arrived?
+                  </span>
+                </div>
+                <div className='flex space-x-2'>
+                  <Button
+                    size='sm'
+                    onClick={() => handleCarIn(reservation._id)}
+                    disabled={markingCarIn === reservation._id}
+                    className='flex-1 bg-blue-600 hover:bg-blue-700'
+                  >
+                    {markingCarIn === reservation._id ? (
+                      <div className='flex items-center justify-center space-x-2'>
+                        <Loader2 className='w-4 h-4 animate-spin' />
+                        <span>Marking...</span>
+                      </div>
+                    ) : (
+                      'Yes, Car In'
+                    )}
+                  </Button>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    onClick={() => setConfirmingCarIn(null)}
+                    className='flex-1 border-gray-300'
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              // Mobile Car In Button
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => setConfirmingCarIn(reservation._id)}
+                className='w-full border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all duration-200 flex items-center justify-center space-x-2'
+              >
+                <CarFront className='h-4 w-4' />
+                <span>Mark Car In</span>
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Cancel Button for Mobile */}
         {reservation.status === ReservationStatus.CREATED && (
@@ -1108,7 +1261,7 @@ export default function ManageParkingSpace({
         )}
 
         {/* Complete Button for Mobile */}
-        {reservation.status === ReservationStatus.PAID && (
+        {reservation.status === ReservationStatus.CAR_IN && (
           <div>
             {confirmingComplete === reservation._id ? (
               // Mobile Complete Confirmation Dialog
@@ -1141,7 +1294,7 @@ export default function ManageParkingSpace({
                     onClick={() => setConfirmingComplete(null)}
                     className='flex-1 border-gray-300'
                   >
-                    Keep as Paid
+                    Keep as Car In
                   </Button>
                 </div>
               </div>
@@ -1694,6 +1847,21 @@ export default function ManageParkingSpace({
                   </Button>
                   <Button
                     variant={
+                      filters.status === 'CAR_IN' ? 'default' : 'outline'
+                    }
+                    size='sm'
+                    onClick={() => {
+                      if (filters.status === 'CAR_IN') {
+                        setFilters({ ...filters, status: 'all' });
+                      } else {
+                        setFilters({ ...filters, status: 'CAR_IN' });
+                      }
+                    }}
+                  >
+                    Car In
+                  </Button>
+                  <Button
+                    variant={
                       filters.status === 'COMPLETED' ? 'default' : 'outline'
                     }
                     size='sm'
@@ -1793,6 +1961,7 @@ export default function ManageParkingSpace({
                               <SelectItem value='all'>All Statuses</SelectItem>
                               <SelectItem value='CREATED'>Created</SelectItem>
                               <SelectItem value='PAID'>Paid</SelectItem>
+                              <SelectItem value='CAR_IN'>Car In</SelectItem>
                               <SelectItem value='COMPLETED'>
                                 Completed
                               </SelectItem>
@@ -2021,14 +2190,7 @@ export default function ManageParkingSpace({
                                 </div>
                               </td>
                               <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                                <Badge
-                                  variant='outline'
-                                  className={
-                                    r.reservation_type === 'whole_day'
-                                      ? 'border-blue-200 text-blue-700 bg-blue-50'
-                                      : 'border-green-200 text-green-700 bg-green-50'
-                                  }
-                                >
+                                <Badge variant='outline'>
                                   {r.reservation_type === 'whole_day'
                                     ? 'Whole Day'
                                     : 'Hourly'}
@@ -2042,6 +2204,8 @@ export default function ManageParkingSpace({
                                   className={
                                     r.status === 'PAID'
                                       ? 'bg-blue-100 text-blue-800'
+                                      : r.status === 'CAR_IN'
+                                      ? 'bg-purple-100 text-purple-800'
                                       : r.status === 'COMPLETED'
                                       ? 'bg-green-100 text-green-800'
                                       : r.status === 'CANCELLED' ||
@@ -2110,6 +2274,8 @@ export default function ManageParkingSpace({
                               className={
                                 r.status === 'PAID'
                                   ? 'bg-blue-100 text-blue-800'
+                                  : r.status === 'CAR_IN'
+                                  ? 'bg-purple-100 text-purple-800'
                                   : r.status === 'COMPLETED'
                                   ? 'bg-green-100 text-green-800'
                                   : r.status === 'CANCELLED' ||
