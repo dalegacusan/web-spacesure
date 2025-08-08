@@ -1460,9 +1460,6 @@ export default function ParkingManagement() {
                           <th className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                             Payments
                           </th>
-                          <th className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                            Actions
-                          </th>
                         </tr>
                       </thead>
                       <tbody className='bg-white divide-y divide-gray-200'>
@@ -1551,9 +1548,6 @@ export default function ParkingManagement() {
                               </td>
                               <td className='px-4 py-4 whitespace-nowrap'>
                                 <PaymentIcon reservation={r} />
-                              </td>
-                              <td className='px-4 py-4 whitespace-nowrap relative'>
-                                <ActionButtons reservation={r} />
                               </td>
                             </tr>
                           );
