@@ -627,10 +627,11 @@ export default function ParkingManagement() {
         <Badge
           className={
             paymentStatus === PaymentStatus.COMPLETED
-              ? 'bg-blue-100 text-blue-800'
+              ? 'bg-green-100 text-green-800'
               : paymentStatus === PaymentStatus.PENDING
               ? 'bg-yellow-100 text-yellow-800'
-              : paymentStatus === PaymentStatus.FAILED
+              : paymentStatus === PaymentStatus.FAILED ||
+                paymentStatus === PaymentStatus.CANCELLED
               ? 'bg-red-100 text-red-800'
               : 'bg-gray-100 text-gray-800'
           }
@@ -1454,6 +1455,9 @@ export default function ParkingManagement() {
                             Amount
                           </th>
                           <th className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                            Status
+                          </th>
+                          <th className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                             Payments
                           </th>
                           <th className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
@@ -1483,10 +1487,6 @@ export default function ParkingManagement() {
                           const timeRange = `${formatUtcTo12HourTime(
                             r.start_time
                           )} – ${formatUtcTo12HourTime(r.end_time)}`;
-                          const paymentStatus = getPreferredPaymentStatus(
-                            r,
-                            'paymaya'
-                          );
 
                           return (
                             <tr key={r._id} className='hover:bg-gray-50'>
@@ -1534,6 +1534,22 @@ export default function ParkingManagement() {
                                 ₱{r.total_price.toFixed(2)}
                               </td>
                               <td className='px-4 py-4 whitespace-nowrap'>
+                                <Badge
+                                  className={
+                                    r.status === 'PAID'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : r.status === 'COMPLETED'
+                                      ? 'bg-green-100 text-green-800'
+                                      : r.status === 'CANCELLED' ||
+                                        r.status === 'PAYMENT_FAILED'
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }
+                                >
+                                  {r.status}
+                                </Badge>
+                              </td>
+                              <td className='px-4 py-4 whitespace-nowrap'>
                                 <PaymentIcon reservation={r} />
                               </td>
                               <td className='px-4 py-4 whitespace-nowrap relative'>
@@ -1559,10 +1575,6 @@ export default function ParkingManagement() {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}`;
-                    const paymentStatus = getPreferredPaymentStatus(
-                      r,
-                      'paymaya'
-                    );
 
                     return (
                       <div key={r._id} className='bg-gray-50 rounded-lg p-4'>
@@ -1575,15 +1587,20 @@ export default function ParkingManagement() {
                               {r.user.first_name} {r.user.last_name}
                             </p>
                           </div>
-                          {/* Replace the existing payment status badges with */}
-                          <div className='mt-3 pt-3 border-t border-gray-200'>
-                            <div className='flex justify-between items-center'>
-                              <span className='text-sm font-medium text-gray-500'>
-                                Payments:
-                              </span>
-                              <PaymentIcon reservation={r} />
-                            </div>
-                          </div>
+                          <Badge
+                            className={
+                              r.status === 'PAID'
+                                ? 'bg-blue-100 text-blue-800'
+                                : r.status === 'COMPLETED'
+                                ? 'bg-green-100 text-green-800'
+                                : r.status === 'CANCELLED' ||
+                                  r.status === 'PAYMENT_FAILED'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }
+                          >
+                            {r.status}
+                          </Badge>
                         </div>
 
                         <div className='space-y-2 text-sm'>
@@ -1630,6 +1647,15 @@ export default function ParkingManagement() {
                             <span className='text-lg font-bold text-[#3B4A9C]'>
                               ₱{r.total_price.toFixed(2)}
                             </span>
+                          </div>
+                        </div>
+
+                        <div className='mt-3 pt-3 border-t border-gray-200'>
+                          <div className='flex justify-between items-center'>
+                            <span className='text-sm font-medium text-gray-500'>
+                              Payments:
+                            </span>
+                            <PaymentIcon reservation={r} />
                           </div>
                         </div>
 
@@ -1691,7 +1717,9 @@ export default function ParkingManagement() {
                                   PaymentStatus.PENDING
                                 ? 'bg-yellow-100 text-yellow-800'
                                 : payment.payment_status ===
-                                  PaymentStatus.FAILED
+                                    PaymentStatus.FAILED ||
+                                  payment.payment_status ===
+                                    PaymentStatus.CANCELLED
                                 ? 'bg-red-100 text-red-800'
                                 : 'bg-gray-100 text-gray-800'
                             }

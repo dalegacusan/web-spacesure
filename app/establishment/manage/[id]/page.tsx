@@ -735,10 +735,11 @@ export default function ManageParkingSpace({
         <Badge
           className={
             paymentStatus === PaymentStatus.COMPLETED
-              ? 'bg-blue-100 text-blue-800'
+              ? 'bg-green-100 text-green-800'
               : paymentStatus === PaymentStatus.PENDING
               ? 'bg-yellow-100 text-yellow-800'
-              : paymentStatus === PaymentStatus.FAILED
+              : paymentStatus === PaymentStatus.FAILED ||
+                paymentStatus === PaymentStatus.CANCELLED
               ? 'bg-red-100 text-red-800'
               : 'bg-gray-100 text-gray-800'
           }
@@ -899,7 +900,9 @@ export default function ManageParkingSpace({
       <div className='flex gap-2'>
         {/* Add Payment Button - Show for all reservations that are not completed or cancelled */}
         {reservation.status !== ReservationStatus.COMPLETED &&
-          reservation.status !== ReservationStatus.CANCELLED && (
+          reservation.status !== ReservationStatus.CANCELLED &&
+          reservation.status !== ReservationStatus.PAYMENT_FAILED &&
+          reservation.status !== ReservationStatus.CREATED && (
             <Button
               variant='outline'
               size='sm'
@@ -1036,7 +1039,9 @@ export default function ManageParkingSpace({
 
         {/* Add Payment Button for Mobile */}
         {reservation.status !== ReservationStatus.COMPLETED &&
-          reservation.status !== ReservationStatus.CANCELLED && (
+          reservation.status !== ReservationStatus.CANCELLED &&
+          reservation.status !== ReservationStatus.PAYMENT_FAILED &&
+          reservation.status !== ReservationStatus.CREATED && (
             <Button
               variant='outline'
               size='sm'
@@ -1794,6 +1799,9 @@ export default function ManageParkingSpace({
                               <SelectItem value='CANCELLED'>
                                 Cancelled
                               </SelectItem>
+                              <SelectItem value='PAYMENT_FAILED'>
+                                Payment Failed
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -1819,6 +1827,9 @@ export default function ManageParkingSpace({
                               </SelectItem>
                               <SelectItem value='PENDING'>Pending</SelectItem>
                               <SelectItem value='FAILED'>Failed</SelectItem>
+                              <SelectItem value='CANCELLED'>
+                                Cancelled
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -2033,7 +2044,8 @@ export default function ManageParkingSpace({
                                       ? 'bg-blue-100 text-blue-800'
                                       : r.status === 'COMPLETED'
                                       ? 'bg-green-100 text-green-800'
-                                      : r.status === 'CANCELLED'
+                                      : r.status === 'CANCELLED' ||
+                                        r.status === 'PAYMENT_FAILED'
                                       ? 'bg-red-100 text-red-800'
                                       : 'bg-gray-100 text-gray-800'
                                   }
@@ -2100,7 +2112,8 @@ export default function ManageParkingSpace({
                                   ? 'bg-blue-100 text-blue-800'
                                   : r.status === 'COMPLETED'
                                   ? 'bg-green-100 text-green-800'
-                                  : r.status === 'CANCELLED'
+                                  : r.status === 'CANCELLED' ||
+                                    r.status === 'PAYMENT_FAILED'
                                   ? 'bg-red-100 text-red-800'
                                   : 'bg-gray-100 text-gray-800'
                               }
@@ -2341,7 +2354,8 @@ export default function ManageParkingSpace({
                         ? 'bg-green-100 text-green-800'
                         : payment.payment_status === 'PENDING'
                         ? 'bg-yellow-100 text-yellow-800'
-                        : payment.payment_status === 'FAILED'
+                        : payment.payment_status === 'FAILED' ||
+                          payment.payment_status === 'CANCELLED'
                         ? 'bg-red-100 text-red-800'
                         : 'bg-gray-100 text-gray-800'
                     }

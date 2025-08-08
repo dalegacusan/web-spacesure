@@ -170,6 +170,7 @@ export default function UserTable({
       case ReservationStatus.CREATED:
         return 'bg-gray-100 text-gray-800';
       case ReservationStatus.CANCELLED:
+      case ReservationStatus.PAYMENT_FAILED:
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -183,6 +184,7 @@ export default function UserTable({
       case PaymentStatus.PENDING:
         return 'bg-yellow-100 text-yellow-800';
       case PaymentStatus.FAILED:
+      case PaymentStatus.CANCELLED:
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -293,31 +295,18 @@ export default function UserTable({
     setModalSearchQuery(''); // Reset search when opening modal
   };
 
+  const findPaymentByMethod = (r: Reservation, method = 'paymaya') =>
+    r.payments?.find(
+      (p) => p.payment_method?.toLowerCase() === method.toLowerCase()
+    );
+
   const getPreferredPaymentStatus = (
-    reservation: Reservation
-  ): PaymentStatus => {
-    if (!reservation.payments || reservation.payments.length === 0) {
-      return PaymentStatus.PENDING;
-    }
-
-    const completedPayment = reservation.payments.find(
-      (payment) => payment.payment_status === PaymentStatus.COMPLETED
-    );
-
-    if (completedPayment) {
-      return PaymentStatus.COMPLETED;
-    }
-
-    const failedPayment = reservation.payments.find(
-      (payment) => payment.payment_status === PaymentStatus.FAILED
-    );
-
-    if (failedPayment) {
-      return PaymentStatus.FAILED;
-    }
-
-    return PaymentStatus.PENDING;
-  };
+    r: Reservation,
+    method = 'paymaya'
+  ): PaymentStatus =>
+    (findPaymentByMethod(r, method)?.payment_status ??
+      r?.payments?.[0]?.payment_status ??
+      PaymentStatus.PENDING) as PaymentStatus;
 
   const PaymentIcon = ({ reservation }: { reservation: Reservation }) => {
     const paymentCount = reservation.payments?.length || 0;
@@ -335,10 +324,11 @@ export default function UserTable({
         <Badge
           className={
             paymentStatus === PaymentStatus.COMPLETED
-              ? 'bg-blue-100 text-blue-800'
+              ? 'bg-green-100 text-green-800'
               : paymentStatus === PaymentStatus.PENDING
               ? 'bg-yellow-100 text-yellow-800'
-              : paymentStatus === PaymentStatus.FAILED
+              : paymentStatus === PaymentStatus.FAILED ||
+                paymentStatus === PaymentStatus.CANCELLED
               ? 'bg-red-100 text-red-800'
               : 'bg-gray-100 text-gray-800'
           }
@@ -901,7 +891,8 @@ export default function UserTable({
                                             ? 'bg-blue-100 text-blue-800'
                                             : r.status === 'COMPLETED'
                                             ? 'bg-green-100 text-green-800'
-                                            : r.status === 'CANCELLED'
+                                            : r.status === 'CANCELLED' ||
+                                              r.status === 'PAYMENT_FAILED'
                                             ? 'bg-red-100 text-red-800'
                                             : 'bg-gray-100 text-gray-800'
                                         }
@@ -960,7 +951,8 @@ export default function UserTable({
                                         ? 'bg-blue-100 text-blue-800'
                                         : r.status === 'COMPLETED'
                                         ? 'bg-green-100 text-green-800'
-                                        : r.status === 'CANCELLED'
+                                        : r.status === 'CANCELLED' ||
+                                          r.status === 'PAYMENT_FAILED'
                                         ? 'bg-red-100 text-red-800'
                                         : 'bg-gray-100 text-gray-800'
                                     }
@@ -1109,7 +1101,10 @@ export default function UserTable({
                               ? 'bg-green-100 text-green-800'
                               : payment.payment_status === PaymentStatus.PENDING
                               ? 'bg-yellow-100 text-yellow-800'
-                              : payment.payment_status === PaymentStatus.FAILED
+                              : payment.payment_status ===
+                                  PaymentStatus.FAILED ||
+                                payment.payment_status ===
+                                  PaymentStatus.CANCELLED
                               ? 'bg-red-100 text-red-800'
                               : 'bg-gray-100 text-gray-800'
                           }

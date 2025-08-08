@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { Reservation } from '@/lib/api';
+import { PaymentStatus } from '@/lib/enums/payment-status.enum';
 import { ReservationStatus } from '@/lib/enums/reservation-status.enum';
 import { AlertTriangle, CreditCard, Receipt, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -153,6 +155,7 @@ export default function HistoryTable() {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'failed':
+      case 'cancelled':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -170,29 +173,77 @@ export default function HistoryTable() {
     });
   };
 
-  const PaymentIcon = ({ item }: { item: HistoryItem }) => {
-    const paymentCount = item.payments?.length || 0;
+  const findPaymentByMethod = (r: Reservation, method = 'paymaya') =>
+    r.payments?.find(
+      (p) => p.payment_method?.toLowerCase() === method.toLowerCase()
+    );
+
+  const getPreferredPaymentStatus = (
+    r: Reservation,
+    method = 'paymaya'
+  ): PaymentStatus =>
+    (findPaymentByMethod(r, method)?.payment_status ??
+      r?.payments?.[0]?.payment_status ??
+      PaymentStatus.PENDING) as PaymentStatus;
+
+  // Combined payment component that shows both status and count
+  const PaymentStatusAndCount = ({
+    reservation,
+  }: {
+    reservation: Reservation;
+  }) => {
+    const paymentCount = reservation.payments?.length || 0;
+    const paymentStatus = getPreferredPaymentStatus(reservation, 'paymaya');
 
     if (paymentCount === 0) {
       return (
-        <div className='flex items-center justify-center'>
-          <span className='text-xs text-gray-400 italic'>No payments</span>
+        <div className='flex flex-col items-center space-y-1'>
+          <Badge
+            className={
+              paymentStatus === PaymentStatus.COMPLETED
+                ? 'bg-blue-100 text-blue-800'
+                : paymentStatus === PaymentStatus.PENDING
+                ? 'bg-yellow-100 text-yellow-800'
+                : paymentStatus === PaymentStatus.FAILED
+                ? 'bg-red-100 text-red-800'
+                : 'bg-gray-100 text-gray-800'
+            }
+          >
+            {paymentStatus}
+          </Badge>
+          <span className='text-xs text-gray-400'>No payments</span>
         </div>
       );
     }
 
     return (
-      <Button
-        variant='ghost'
-        size='sm'
-        onClick={() => openPaymentModal(item.payments, item.id)}
-        className='flex items-center space-x-1 hover:bg-blue-50'
-      >
-        <CreditCard className='h-4 w-4 text-blue-600' />
-        <span className='text-xs text-blue-600'>
-          {paymentCount} payment{paymentCount > 1 ? 's' : ''}
-        </span>
-      </Button>
+      <div className='flex flex-col items-center space-y-1'>
+        <Badge
+          className={
+            paymentStatus === PaymentStatus.COMPLETED
+              ? 'bg-green-100 text-green-800'
+              : paymentStatus === PaymentStatus.PENDING
+              ? 'bg-yellow-100 text-yellow-800'
+              : paymentStatus === PaymentStatus.FAILED ||
+                paymentStatus === PaymentStatus.CANCELLED
+              ? 'bg-red-100 text-red-800'
+              : 'bg-gray-100 text-gray-800'
+          }
+        >
+          {paymentStatus}
+        </Badge>
+        <Button
+          variant='ghost'
+          size='sm'
+          onClick={() =>
+            openPaymentModal(reservation.payments || [], reservation._id)
+          }
+          className='flex items-center space-x-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 h-6 px-2'
+        >
+          <CreditCard className='h-3 w-3' />
+          <span className='text-xs'>{paymentCount}</span>
+        </Button>
+      </div>
     );
   };
 
@@ -401,7 +452,8 @@ export default function HistoryTable() {
                           ? 'bg-blue-100 text-blue-800'
                           : item.status === 'COMPLETED'
                           ? 'bg-green-100 text-green-800'
-                          : item.status === 'CANCELLED'
+                          : item.status === 'CANCELLED' ||
+                            item.status === 'PAYMENT_FAILED'
                           ? 'bg-red-100 text-red-800'
                           : 'bg-gray-100 text-gray-800'
                       }
@@ -410,7 +462,7 @@ export default function HistoryTable() {
                     </Badge>
                   </td>
                   <td className='px-6 py-4 whitespace-nowrap'>
-                    <PaymentIcon item={item} />
+                    <PaymentStatusAndCount reservation={item} />
                   </td>
                   <td className='px-6 py-4 whitespace-nowrap relative'>
                     <CancelButton item={item} />
@@ -435,7 +487,8 @@ export default function HistoryTable() {
                       ? 'bg-blue-100 text-blue-800'
                       : item.status === 'COMPLETED'
                       ? 'bg-green-100 text-green-800'
-                      : item.status === 'CANCELLED'
+                      : item.status === 'CANCELLED' ||
+                        item.status === 'PAYMENT_FAILED'
                       ? 'bg-red-100 text-red-800'
                       : 'bg-gray-100 text-gray-800'
                   }
@@ -493,7 +546,7 @@ export default function HistoryTable() {
 
               {/* Payment Button for Mobile */}
               <div className='pt-2 border-t'>
-                <PaymentIcon item={item} />
+                <PaymentStatusAndCount reservation={item} />
               </div>
 
               <MobileCancelButton item={item} />

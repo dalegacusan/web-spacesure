@@ -391,10 +391,11 @@ export default function ReservationsTable({ data }: Props) {
         <Badge
           className={
             paymentStatus === PaymentStatus.COMPLETED
-              ? 'bg-blue-100 text-blue-800'
+              ? 'bg-green-100 text-green-800'
               : paymentStatus === PaymentStatus.PENDING
               ? 'bg-yellow-100 text-yellow-800'
-              : paymentStatus === PaymentStatus.FAILED
+              : paymentStatus === PaymentStatus.FAILED ||
+                paymentStatus === PaymentStatus.CANCELLED
               ? 'bg-red-100 text-red-800'
               : 'bg-gray-100 text-gray-800'
           }
@@ -792,6 +793,9 @@ export default function ReservationsTable({ data }: Props) {
                     <SelectItem value='PAID'>Paid</SelectItem>
                     <SelectItem value='COMPLETED'>Completed</SelectItem>
                     <SelectItem value='CANCELLED'>Cancelled</SelectItem>
+                    <SelectItem value='PAYMENT_FAILED'>
+                      Payment Failed
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -815,6 +819,7 @@ export default function ReservationsTable({ data }: Props) {
                     <SelectItem value='COMPLETED'>Completed</SelectItem>
                     <SelectItem value='PENDING'>Pending</SelectItem>
                     <SelectItem value='FAILED'>Failed</SelectItem>
+                    <SelectItem value='CANCELLED'>Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -839,7 +844,7 @@ export default function ReservationsTable({ data }: Props) {
                 </Select>
               </div>
 
-              {/* City Filter */}
+              {/* Date Range Filter */}
               <div>
                 <Label className='text-sm font-medium mb-2 block'>
                   Reservation Date
@@ -925,6 +930,9 @@ export default function ReservationsTable({ data }: Props) {
                   Amount
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                  Status
+                </th>
+                <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                   Payments
                 </th>
                 <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
@@ -1002,6 +1010,22 @@ export default function ReservationsTable({ data }: Props) {
                       ₱{r.total_price.toFixed(2)}
                     </td>
                     <td className='px-6 py-4 whitespace-nowrap'>
+                      <Badge
+                        className={
+                          r.status === 'PAID'
+                            ? 'bg-blue-100 text-blue-800'
+                            : r.status === 'COMPLETED'
+                            ? 'bg-green-100 text-green-800'
+                            : r.status === 'CANCELLED' ||
+                              r.status === 'PAYMENT_FAILED'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }
+                      >
+                        {r.status}
+                      </Badge>
+                    </td>
+                    <td className='px-6 py-4 whitespace-nowrap'>
                       <PaymentIcon reservation={r} />
                     </td>
                     <td className='px-6 py-4 whitespace-nowrap relative'>
@@ -1046,7 +1070,8 @@ export default function ReservationsTable({ data }: Props) {
                         ? 'bg-blue-100 text-blue-800'
                         : r.status === 'COMPLETED'
                         ? 'bg-green-100 text-green-800'
-                        : r.status === 'CANCELLED'
+                        : r.status === 'CANCELLED' ||
+                          r.status === 'PAYMENT_FAILED'
                         ? 'bg-red-100 text-red-800'
                         : 'bg-gray-100 text-gray-800'
                     }
@@ -1166,7 +1191,10 @@ export default function ReservationsTable({ data }: Props) {
                               ? 'bg-green-100 text-green-800'
                               : payment.payment_status === PaymentStatus.PENDING
                               ? 'bg-yellow-100 text-yellow-800'
-                              : payment.payment_status === PaymentStatus.FAILED
+                              : payment.payment_status ===
+                                  PaymentStatus.FAILED ||
+                                payment.payment_status ===
+                                  PaymentStatus.CANCELLED
                               ? 'bg-red-100 text-red-800'
                               : 'bg-gray-100 text-gray-800'
                           }

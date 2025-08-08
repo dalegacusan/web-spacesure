@@ -246,19 +246,6 @@ export default function PaymentHistoryTable({ data }: Props) {
     (payment) => payment.payment_status === PaymentStatus.FAILED
   );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case PaymentStatus.COMPLETED:
-        return 'default';
-      case PaymentStatus.PENDING:
-        return 'secondary';
-      case PaymentStatus.FAILED:
-        return 'destructive';
-      default:
-        return 'secondary';
-    }
-  };
-
   return (
     <div className='space-y-6'>
       <Card className='bg-white'>
@@ -390,6 +377,9 @@ export default function PaymentHistoryTable({ data }: Props) {
                         </SelectItem>
                         <SelectItem value={PaymentStatus.FAILED}>
                           Failed
+                        </SelectItem>
+                        <SelectItem value={PaymentStatus.CANCELLED}>
+                          Cancelled
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -555,7 +545,20 @@ export default function PaymentHistoryTable({ data }: Props) {
                         )}
                       </td>
                       <td className='px-4 py-4 whitespace-nowrap'>
-                        <Badge variant={getStatusColor(payment.payment_status)}>
+                        <Badge
+                          className={
+                            payment.payment_status === PaymentStatus.COMPLETED
+                              ? 'bg-green-100 text-green-800'
+                              : payment.payment_status === PaymentStatus.PENDING
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : payment.payment_status ===
+                                  PaymentStatus.FAILED ||
+                                payment.payment_status ===
+                                  PaymentStatus.CANCELLED
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }
+                        >
                           {payment.payment_status}
                         </Badge>
                       </td>
@@ -580,7 +583,18 @@ export default function PaymentHistoryTable({ data }: Props) {
                         {payment.reservation?._id}
                       </p>
                     </div>
-                    <Badge variant={getStatusColor(payment.payment_status)}>
+                    <Badge
+                      className={
+                        payment.payment_status === PaymentStatus.COMPLETED
+                          ? 'bg-green-100 text-green-800'
+                          : payment.payment_status === PaymentStatus.PENDING
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : payment.payment_status === PaymentStatus.FAILED ||
+                            payment.payment_status === PaymentStatus.CANCELLED
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }
+                    >
                       {payment.payment_status}
                     </Badge>
                   </div>
